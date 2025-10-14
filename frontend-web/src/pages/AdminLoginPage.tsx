@@ -7,8 +7,8 @@ import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { Mail, Lock, ArrowLeft, Shield, Settings } from 'lucide-react';
 
-import { useAuthStore } from '../store';
-import { authService } from '../services/auth';
+import { useAuthStore } from '../store/index.ts';
+import { authService } from '../services/auth.ts';
 import { AdminLoginFormData } from '../types';
 
 const schema = yup.object({

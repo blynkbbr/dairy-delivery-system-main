@@ -1,7 +1,7 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { useAuthStore } from '../store';
-import LoadingScreen from './LoadingScreen';
+import { useAuthStore } from '../store/index.ts';
+import LoadingScreen from './LoadingScreen.tsx';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;

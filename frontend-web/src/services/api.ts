@@ -1,6 +1,6 @@
 import axios, { AxiosResponse, AxiosError } from 'axios';
 import { toast } from 'react-hot-toast';
-import { useAuthStore } from '../store';
+import { useAuthStore } from '../store/index.ts';
 
 // Create axios instance
 const api = axios.create({

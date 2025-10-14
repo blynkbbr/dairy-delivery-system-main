@@ -1,5 +1,5 @@
 import React from 'react';
-import { useAuthStore } from '../store';
+import { useAuthStore } from '../store/index.ts';
 
 const DashboardPage: React.FC = () => {
   const { user, logout } = useAuthStore();

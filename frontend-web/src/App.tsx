@@ -1,22 +1,22 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
-import { useAuthStore } from './store';
+import { useAuthStore } from './store/index.ts';
 
 // Pages
-import LandingPage from './pages/LandingPage';
-import LoginPage from './pages/LoginPage';
-import AdminLoginPage from './pages/AdminLoginPage';
-import DashboardPage from './pages/DashboardPage';
-import ProductsPage from './pages/ProductsPage';
-import CartPage from './pages/CartPage';
-import OrdersPage from './pages/OrdersPage';
-import ProfilePage from './pages/ProfilePage';
-import AdminDashboard from './pages/AdminDashboard';
+import LandingPage from './pages/LandingPage.tsx';
+import LoginPage from './pages/LoginPage.tsx';
+import AdminLoginPage from './pages/AdminLoginPage.tsx';
+import DashboardPage from './pages/DashboardPage.tsx';
+import ProductsPage from './pages/ProductsPage.tsx';
+import CartPage from './pages/CartPage.tsx';
+import OrdersPage from './pages/OrdersPage.tsx';
+import ProfilePage from './pages/ProfilePage.tsx';
+import AdminDashboard from './pages/AdminDashboard.tsx';
 
 // Components
-import LoadingScreen from './components/LoadingScreen';
-import ProtectedRoute from './components/ProtectedRoute';
+import LoadingScreen from './components/LoadingScreen.tsx';
+import ProtectedRoute from './components/ProtectedRoute.tsx';
 
 function App() {
   const { isAuthenticated, user, isLoading } = useAuthStore();

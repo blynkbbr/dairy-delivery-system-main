@@ -7,8 +7,8 @@ import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { Phone, ArrowLeft, Shield, Clock } from 'lucide-react';
 
-import { useAuthStore } from '../store';
-import { authService } from '../services/auth';
+import { useAuthStore } from '../store/index.ts';
+import { authService } from '../services/auth.ts';
 import { LoginFormData } from '../types';
 
 const phoneSchema = yup.object({
