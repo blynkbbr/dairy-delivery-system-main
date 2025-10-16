@@ -1,6 +1,7 @@
 const express = require('express');
 const { authenticate, authorize } = require('../middleware/auth');
 const { manualTriggers } = require('../services/cronJobs');
+const db = require('../utils/database');
 
 const router = express.Router();
 
@@ -414,6 +415,133 @@ router.put('/products/:id', async (req, res) => {
     res.status(500).json({
       error: 'Failed to update product',
       details: error.message
+    });
+  }
+});
+
+/**
+ * Subscription Management
+ */
+router.get('/subscriptions', async (req, res) => {
+  try {
+    const { page = 1, limit = 20, search = '', status = '', frequency = '' } = req.query;
+    const offset = (page - 1) * limit;
+
+    let query = db('subscriptions')
+      .select(
+        'subscriptions.*',
+        'users.full_name as user_name',
+        'users.email as user_email',
+        'users.phone as user_phone',
+        'products.name as product_name',
+        'products.price as product_price',
+        'products.unit as product_unit'
+      )
+      .leftJoin('users', 'subscriptions.user_id', 'users.id')
+      .leftJoin('products', 'subscriptions.product_id', 'products.id');
+
+    if (search) {
+      query = query.where(function() {
+        this.where('users.full_name', 'like', `%${search}%`)
+            .orWhere('users.email', 'like', `%${search}%`)
+            .orWhere('products.name', 'like', `%${search}%`);
+      });
+    }
+
+    if (status) {
+      query = query.where('subscriptions.status', status);
+    }
+
+    if (frequency) {
+      query = query.where('subscriptions.frequency', frequency);
+    }
+
+    const subscriptions = await query
+      .limit(parseInt(limit))
+      .offset(parseInt(offset))
+      .orderBy('subscriptions.created_at', 'desc');
+
+    const total = await db('subscriptions').count('id as count').first();
+
+    const formattedSubscriptions = subscriptions.map(sub => ({
+      id: sub.id,
+      user: {
+        id: sub.user_id,
+        full_name: sub.user_name,
+        email: sub.user_email,
+        phone: sub.user_phone
+      },
+      product: {
+        id: sub.product_id,
+        name: sub.product_name,
+        price: sub.product_price,
+        unit: sub.product_unit
+      },
+      quantity: sub.quantity,
+      frequency: sub.frequency,
+      delivery_days: sub.delivery_days ? JSON.parse(sub.delivery_days) : null,
+      delivery_date: sub.delivery_date,
+      status: sub.status,
+      start_date: sub.start_date,
+      next_delivery: sub.next_delivery,
+      created_at: sub.created_at
+    }));
+
+    res.json({
+      success: true,
+      data: formattedSubscriptions,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: total.count,
+        pages: Math.ceil(total.count / limit)
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching subscriptions:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch subscriptions'
+    });
+  }
+});
+
+router.put('/subscriptions/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (!status || !['active', 'paused', 'cancelled'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid status is required (active, paused, cancelled)'
+      });
+    }
+
+    const subscription = await db('subscriptions').where('id', id).first();
+    if (!subscription) {
+      return res.status(404).json({
+        success: false,
+        message: 'Subscription not found'
+      });
+    }
+
+    await db('subscriptions')
+      .where('id', id)
+      .update({
+        status,
+        updated_at: new Date()
+      });
+
+    res.json({
+      success: true,
+      message: `Subscription ${status} successfully`
+    });
+  } catch (error) {
+    console.error('Error updating subscription:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update subscription'
     });
   }
 });

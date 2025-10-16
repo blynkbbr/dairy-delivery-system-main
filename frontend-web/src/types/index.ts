@@ -3,10 +3,12 @@ export interface User {
   phone: string;
   email?: string;
   full_name?: string;
+  address?: string;
+  date_of_birth?: string;
   role: 'user' | 'agent' | 'admin';
   status: 'active' | 'inactive' | 'suspended';
   prepaid_balance: number;
-  payment_mode: 'prepaid' | 'postpaid';
+  payment_mode: 'prepaid' | 'cash_on_delivery';
   profile_image?: string;
   created_at: string;
 }
@@ -31,14 +33,19 @@ export interface Product {
   id: string;
   name: string;
   description?: string;
-  unit: string;
   price: number;
-  is_milk: boolean;
-  status: 'active' | 'inactive';
+  unit: string;
+  category: string;
   image_url?: string;
+  is_available: boolean;
+  is_subscription_available: boolean;
   stock_quantity: number;
-  minimum_stock: number;
-  metadata?: Record<string, any>;
+  discount_percentage: number;
+  min_order_quantity: number;
+  max_order_quantity: number;
+  nutritional_info?: string;
+  storage_instructions?: string;
+  shelf_life_days?: number;
   created_at: string;
 }
 
@@ -56,43 +63,39 @@ export interface OrderItem {
 export interface Order {
   id: string;
   user_id: string;
-  address_id: string;
   order_number: string;
   subtotal: number;
   delivery_fee: number;
   tax: number;
   total: number;
   status: 'pending' | 'confirmed' | 'processing' | 'out_for_delivery' | 'delivered' | 'cancelled' | 'refunded';
+  payment_mode: 'prepaid' | 'cash_on_delivery';
+  delivery_address: string;
   tracking_number?: string;
-  carrier?: string;
   notes?: string;
   confirmed_at?: string;
   delivered_at?: string;
   created_at: string;
   items?: OrderItem[];
-  // Address details for display
-  address_line1?: string;
-  address_line2?: string;
-  address_area?: string;
-  address_city?: string;
-  address_state?: string;
-  address_pincode?: string;
 }
 
 export interface Subscription {
   id: string;
   user_id: string;
-  address_id: string;
   product_id: string;
-  default_quantity: number;
-  delivery_days: number[]; // Array of weekday numbers (0-6)
+  product?: Product; // Include product details
+  quantity: number;
+  frequency: 'daily' | 'weekly' | 'monthly';
+  delivery_days?: string[]; // Array of day names for weekly (e.g., ['monday', 'wednesday'])
+  delivery_date?: number; // Day of month for monthly subscriptions (1-31)
+  delivery_time_slot?: string;
   start_date: string;
   end_date?: string;
-  billing_cycle: 'weekly' | 'monthly';
-  payment_mode: 'prepaid' | 'postpaid';
+  next_delivery?: string;
   status: 'active' | 'paused' | 'cancelled';
   notes?: string;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface CartItem {

@@ -16,7 +16,7 @@ exports.seed = async function(knex) {
       role: 'admin',
       status: 'active',
       prepaid_balance: 0,
-      payment_mode: 'postpaid'
+      payment_mode: 'cash_on_delivery'
     }
   ]);
 };

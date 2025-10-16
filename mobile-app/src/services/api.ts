@@ -126,6 +126,35 @@ class ApiService {
     return response.data.data!;
   }
 
+  // Agent endpoints
+  async getAgentDeliveries(): Promise<any[]> {
+    const response = await this.client.get<ApiResponse<any[]>>(
+      '/agent/deliveries/today'
+    );
+    return response.data.data!;
+  }
+
+  async getAgentRoute(): Promise<any> {
+    const response = await this.client.get<ApiResponse<any>>(
+      '/agent/route/today'
+    );
+    return response.data.data!;
+  }
+
+  async updateDeliveryStatus(deliveryId: string, status: string): Promise<void> {
+    await this.client.put(
+      `/agent/deliveries/${deliveryId}`,
+      { status }
+    );
+  }
+
+  async getAgentStats(): Promise<any> {
+    const response = await this.client.get<ApiResponse<any>>(
+      '/agent/stats'
+    );
+    return response.data.data!;
+  }
+
   async updateProfile(data: ProfileForm): Promise<User> {
     const response = await this.client.put<ApiResponse<User>>(
       API_ENDPOINTS.USERS.UPDATE_PROFILE,

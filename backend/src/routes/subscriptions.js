@@ -1,410 +1,516 @@
 const express = require('express');
-const { body, query, validationResult } = require('express-validator');
-const { authenticate } = require('../middleware/auth');
-const moment = require('moment');
+const { body, validationResult, query } = require('express-validator');
+const db = require('../utils/database');
+const { authenticate, authorize } = require('../middleware/auth');
 
 const router = express.Router();
 
-router.use(authenticate);
-
-/**
- * Get user's subscriptions
- * GET /api/subscriptions
- */
-router.get('/', async (req, res) => {
-  try {
-    const db = require('../utils/database');
-    
-    const subscriptions = await db('subscriptions')
-      .select(
-        'subscriptions.*',
-        'products.name as product_name',
-        'products.unit as product_unit',
-        'products.price as current_price',
-        'addresses.line1 as address_line1',
-        'addresses.area as address_area',
-        'addresses.city as address_city'
-      )
-      .leftJoin('products', 'subscriptions.product_id', 'products.id')
-      .leftJoin('addresses', 'subscriptions.address_id', 'addresses.id')
-      .where('subscriptions.user_id', req.user.id)
-      .orderBy('subscriptions.created_at', 'desc');
-
-    // Parse delivery_days JSON
-    const subscriptionsWithDays = subscriptions.map(sub => ({
-      ...sub,
-      delivery_days: JSON.parse(sub.delivery_days || '[]')
-    }));
-
-    res.json({
-      success: true,
-      subscriptions: subscriptionsWithDays
-    });
-  } catch (error) {
-    console.error('Get subscriptions error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
+// Helper function to calculate next delivery date
+function calculateNextDelivery(startDate, frequency, deliveryDays, deliveryDate) {
+  const start = new Date(startDate);
+  const now = new Date();
+  
+  if (frequency === 'daily') {
+    const next = new Date(Math.max(start, now));
+    next.setDate(next.getDate() + 1);
+    return next.toISOString().split('T')[0];
+  } else if (frequency === 'weekly') {
+    // Implementation for weekly delivery
+    const next = new Date(Math.max(start, now));
+    next.setDate(next.getDate() + 7);
+    return next.toISOString().split('T')[0];
+  } else if (frequency === 'monthly') {
+    // Implementation for monthly delivery
+    const next = new Date(Math.max(start, now));
+    next.setMonth(next.getMonth() + 1);
+    return next.toISOString().split('T')[0];
   }
-});
+  
+  return startDate;
+}
 
-/**
- * Create new subscription
- * POST /api/subscriptions
- */
-router.post('/', [
-  body('address_id').isUUID().withMessage('Valid address ID is required'),
-  body('product_id').isUUID().withMessage('Valid product ID is required'),
-  body('default_quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
-  body('delivery_days').isArray({ min: 1 }).withMessage('At least one delivery day is required'),
-  body('delivery_days.*').isInt({ min: 0, max: 6 }).withMessage('Invalid delivery day'),
-  body('start_date').isDate().withMessage('Valid start date is required'),
-  body('end_date').optional().isDate(),
-  body('billing_cycle').isIn(['weekly', 'monthly']).withMessage('Invalid billing cycle'),
-  body('payment_mode').optional().isIn(['prepaid', 'postpaid']),
-  body('notes').optional().trim()
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        errors: errors.array()
-      });
-    }
-
-    const db = require('../utils/database');
-    const {
-      address_id,
-      product_id,
-      default_quantity,
-      delivery_days,
-      start_date,
-      end_date,
-      billing_cycle,
-      payment_mode,
-      notes
-    } = req.body;
-
-    // Verify address belongs to user
-    const address = await db('addresses')
-      .where({ id: address_id, user_id: req.user.id })
-      .first();
-
-    if (!address) {
-      return res.status(404).json({
-        success: false,
-        message: 'Address not found'
-      });
-    }
-
-    // Verify product exists and is milk
-    const product = await db('products')
-      .where({ id: product_id, status: 'active', is_milk: true })
-      .first();
-
-    if (!product) {
-      return res.status(400).json({
-        success: false,
-        message: 'Product not found or not available for subscription'
-      });
-    }
-
-    // Create subscription
-    const [subscription] = await db('subscriptions')
-      .insert({
-        user_id: req.user.id,
-        address_id,
-        product_id,
-        default_quantity,
-        delivery_days: JSON.stringify(delivery_days),
-        start_date,
-        end_date,
-        billing_cycle,
-        payment_mode: payment_mode || req.user.payment_mode,
-        status: 'active',
-        notes
-      })
-      .returning('*');
-
-    // Generate initial subscription deliveries
-    await generateSubscriptionDeliveries(subscription.id);
-
-    res.status(201).json({
-      success: true,
-      message: 'Subscription created successfully',
-      subscription: {
-        ...subscription,
-        delivery_days: JSON.parse(subscription.delivery_days)
-      }
-    });
-  } catch (error) {
-    console.error('Create subscription error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
-  }
-});
-
-/**
- * Update subscription
- * PUT /api/subscriptions/:id
- */
-router.put('/:id', [
-  body('default_quantity').optional().isInt({ min: 1 }),
-  body('delivery_days').optional().isArray({ min: 1 }),
-  body('delivery_days.*').optional().isInt({ min: 0, max: 6 }),
-  body('billing_cycle').optional().isIn(['weekly', 'monthly']),
-  body('payment_mode').optional().isIn(['prepaid', 'postpaid']),
-  body('status').optional().isIn(['active', 'paused', 'cancelled']),
-  body('notes').optional().trim()
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        errors: errors.array()
-      });
-    }
-
-    const db = require('../utils/database');
-    const { id } = req.params;
-    const updateData = { ...req.body };
-
-    // Verify subscription belongs to user
-    const subscription = await db('subscriptions')
-      .where({ id, user_id: req.user.id })
-      .first();
-
-    if (!subscription) {
-      return res.status(404).json({
-        success: false,
-        message: 'Subscription not found'
-      });
-    }
-
-    // Handle delivery_days JSON
-    if (updateData.delivery_days) {
-      updateData.delivery_days = JSON.stringify(updateData.delivery_days);
-    }
-
-    await db('subscriptions')
-      .where('id', id)
-      .update(updateData);
-
-    // If delivery days or quantity changed, regenerate future deliveries
-    if (updateData.delivery_days || updateData.default_quantity) {
-      await regenerateSubscriptionDeliveries(id);
-    }
-
-    const updatedSubscription = await db('subscriptions')
-      .where('id', id)
-      .first();
-
-    res.json({
-      success: true,
-      message: 'Subscription updated successfully',
-      subscription: {
-        ...updatedSubscription,
-        delivery_days: JSON.parse(updatedSubscription.delivery_days)
-      }
-    });
-  } catch (error) {
-    console.error('Update subscription error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
-  }
-});
-
-/**
- * Get subscription details
- * GET /api/subscriptions/:id
- */
-router.get('/:id', async (req, res) => {
-  try {
-    const db = require('../utils/database');
-    const { id } = req.params;
-
-    const subscription = await db('subscriptions')
-      .select(
-        'subscriptions.*',
-        'products.name as product_name',
-        'products.unit as product_unit',
-        'products.price as current_price',
-        'addresses.line1 as address_line1',
-        'addresses.line2 as address_line2',
-        'addresses.area as address_area',
-        'addresses.city as address_city',
-        'addresses.state as address_state'
-      )
-      .leftJoin('products', 'subscriptions.product_id', 'products.id')
-      .leftJoin('addresses', 'subscriptions.address_id', 'addresses.id')
-      .where('subscriptions.id', id)
-      .where('subscriptions.user_id', req.user.id)
-      .first();
-
-    if (!subscription) {
-      return res.status(404).json({
-        success: false,
-        message: 'Subscription not found'
-      });
-    }
-
-    // Get upcoming deliveries
-    const upcomingDeliveries = await db('subscription_deliveries')
-      .where('subscription_id', id)
-      .where('delivery_date', '>=', new Date())
-      .orderBy('delivery_date', 'asc')
-      .limit(10);
-
-    res.json({
-      success: true,
-      subscription: {
-        ...subscription,
-        delivery_days: JSON.parse(subscription.delivery_days),
-        upcoming_deliveries: upcomingDeliveries
-      }
-    });
-  } catch (error) {
-    console.error('Get subscription error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
-  }
-});
-
-/**
- * Get subscription deliveries
- * GET /api/subscriptions/:id/deliveries
- */
-router.get('/:id/deliveries', [
+// Get user subscriptions
+router.get('/', [
+  authenticate,
   query('limit').optional().isInt({ min: 1, max: 100 }),
   query('offset').optional().isInt({ min: 0 }),
-  query('status').optional().isIn(['scheduled', 'out_for_delivery', 'delivered', 'missed', 'cancelled'])
+  query('status').optional().isIn(['active', 'paused', 'cancelled'])
 ], async (req, res) => {
   try {
-    const db = require('../utils/database');
-    const { id } = req.params;
+    const userId = req.user.id;
     const { limit = 20, offset = 0, status } = req.query;
 
-    // Verify subscription belongs to user
-    const subscription = await db('subscriptions')
-      .where({ id, user_id: req.user.id })
-      .first();
-
-    if (!subscription) {
-      return res.status(404).json({
-        success: false,
-        message: 'Subscription not found'
-      });
-    }
-
-    let query = db('subscription_deliveries')
-      .where('subscription_id', id)
-      .orderBy('delivery_date', 'desc')
+    // Build query with Knex
+    let query = db('subscriptions')
+      .select(
+        'subscriptions.*',
+        'products.name as product_name',
+        'products.price as product_price',
+        'products.unit as product_unit',
+        'products.image_url as product_image'
+      )
+      .leftJoin('products', 'subscriptions.product_id', 'products.id')
+      .where('subscriptions.user_id', userId)
+      .orderBy('subscriptions.created_at', 'desc')
       .limit(parseInt(limit))
       .offset(parseInt(offset));
 
     if (status) {
-      query = query.where('status', status);
+      query = query.where('subscriptions.status', status);
     }
 
-    const deliveries = await query;
+    const subscriptions = await query;
 
-    res.json({
+    // Get total count
+    let countQuery = db('subscriptions')
+      .count('id as total')
+      .where('user_id', userId);
+    
+    if (status) {
+      countQuery = countQuery.where('status', status);
+    }
+
+    const countResult = await countQuery.first();
+    const total = parseInt(countResult.total);
+
+    const formattedSubscriptions = subscriptions.map(sub => ({
+      id: sub.id,
+      user_id: sub.user_id,
+      product_id: sub.product_id,
+      product: sub.product_name ? {
+        id: sub.product_id,
+        name: sub.product_name,
+        price: sub.product_price,
+        unit: sub.product_unit,
+        image_url: sub.product_image
+      } : null,
+      quantity: sub.quantity,
+      frequency: sub.frequency,
+      delivery_days: sub.delivery_days ? JSON.parse(sub.delivery_days) : null,
+      delivery_date: sub.delivery_date,
+      delivery_time_slot: sub.delivery_time_slot,
+      start_date: sub.start_date,
+      end_date: sub.end_date,
+      next_delivery: sub.next_delivery,
+      status: sub.status,
+      notes: sub.notes,
+      created_at: sub.created_at,
+      updated_at: sub.updated_at
+    }));
+
+    res.json({ 
       success: true,
-      deliveries
+      data: formattedSubscriptions,
+      pagination: {
+        total,
+        limit: parseInt(limit),
+        offset: parseInt(offset),
+        hasMore: offset + formattedSubscriptions.length < total
+      }
     });
   } catch (error) {
-    console.error('Get subscription deliveries error:', error);
-    res.status(500).json({
+    console.error('Get subscriptions error:', error);
+    res.status(500).json({ 
       success: false,
-      message: 'Internal server error'
+      message: 'Failed to fetch subscriptions' 
     });
   }
 });
 
-/**
- * Helper functions
- */
-async function generateSubscriptionDeliveries(subscriptionId) {
-  const db = require('../utils/database');
-  
+// Get single subscription
+router.get('/:id', authenticate, async (req, res) => {
   try {
-    const subscription = await db('subscriptions').where('id', subscriptionId).first();
-    if (!subscription || subscription.status !== 'active') {
-      return;
+    const userId = req.user.id;
+    const subscriptionId = req.params.id;
+
+    const subscription = await db('subscriptions')
+      .select(
+        'subscriptions.*',
+        'products.name as product_name',
+        'products.price as product_price',
+        'products.unit as product_unit',
+        'products.image_url as product_image'
+      )
+      .leftJoin('products', 'subscriptions.product_id', 'products.id')
+      .where({ 'subscriptions.id': subscriptionId, 'subscriptions.user_id': userId })
+      .first();
+
+    if (!subscription) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Subscription not found' 
+      });
     }
 
-    const deliveryDays = JSON.parse(subscription.delivery_days);
-    const startDate = moment(subscription.start_date);
-    const endDate = subscription.end_date ? moment(subscription.end_date) : moment().add(3, 'months');
-    
-    const product = await db('products').where('id', subscription.product_id).first();
-    
-    const deliveriesToCreate = [];
-    const current = startDate.clone();
-    
-    while (current.isSameOrBefore(endDate)) {
-      const dayOfWeek = current.day(); // 0 = Sunday, 6 = Saturday
-      
-      if (deliveryDays.includes(dayOfWeek)) {
-        // Check if delivery already exists
-        const existingDelivery = await db('subscription_deliveries')
-          .where('subscription_id', subscriptionId)
-          .where('delivery_date', current.format('YYYY-MM-DD'))
-          .first();
-        
-        if (!existingDelivery) {
-          deliveriesToCreate.push({
-            subscription_id: subscriptionId,
-            user_id: subscription.user_id,
-            address_id: subscription.address_id,
-            product_id: subscription.product_id,
-            delivery_date: current.format('YYYY-MM-DD'),
-            quantity: subscription.default_quantity,
-            unit_price: product.price,
-            total_price: parseFloat(product.price) * subscription.default_quantity,
-            status: 'scheduled'
-          });
-        }
-      }
-      
-      current.add(1, 'day');
-    }
-    
-    if (deliveriesToCreate.length > 0) {
-      await db('subscription_deliveries').insert(deliveriesToCreate);
-    }
-  } catch (error) {
-    console.error('Generate subscription deliveries error:', error);
-  }
-}
+    const formattedSubscription = {
+      id: subscription.id,
+      user_id: subscription.user_id,
+      product_id: subscription.product_id,
+      product: subscription.product_name ? {
+        id: subscription.product_id,
+        name: subscription.product_name,
+        price: subscription.product_price,
+        unit: subscription.product_unit,
+        image_url: subscription.product_image
+      } : null,
+      quantity: subscription.quantity,
+      frequency: subscription.frequency,
+      delivery_days: subscription.delivery_days ? JSON.parse(subscription.delivery_days) : null,
+      delivery_date: subscription.delivery_date,
+      delivery_time_slot: subscription.delivery_time_slot,
+      start_date: subscription.start_date,
+      end_date: subscription.end_date,
+      next_delivery: subscription.next_delivery,
+      status: subscription.status,
+      notes: subscription.notes,
+      created_at: subscription.created_at,
+      updated_at: subscription.updated_at
+    };
 
-async function regenerateSubscriptionDeliveries(subscriptionId) {
-  const db = require('../utils/database');
-  
-  try {
-    // Delete future scheduled deliveries
-    await db('subscription_deliveries')
-      .where('subscription_id', subscriptionId)
-      .where('delivery_date', '>', new Date())
-      .where('status', 'scheduled')
-      .del();
-    
-    // Generate new deliveries
-    await generateSubscriptionDeliveries(subscriptionId);
+    res.json({ 
+      success: true,
+      data: formattedSubscription 
+    });
   } catch (error) {
-    console.error('Regenerate subscription deliveries error:', error);
+    console.error('Get subscription error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to fetch subscription' 
+    });
   }
-}
+});
+
+// Create subscription
+router.post('/', [
+  authenticate,
+  body('product_id').isUUID().withMessage('Valid product ID is required'),
+  body('quantity').isInt({ min: 1 }).withMessage('Valid quantity is required'),
+  body('frequency').isIn(['daily', 'weekly', 'monthly']).withMessage('Valid frequency is required'),
+  body('start_date').isISO8601().withMessage('Valid start date is required'),
+  body('delivery_days').optional().isArray(),
+  body('delivery_date').optional().isInt({ min: 1, max: 31 }),
+  body('delivery_time_slot').optional().isString(),
+  body('notes').optional().isString()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const userId = req.user.id;
+    const { 
+      product_id, 
+      quantity, 
+      frequency, 
+      delivery_days, 
+      delivery_date, 
+      start_date, 
+      delivery_time_slot, 
+      notes 
+    } = req.body;
+
+    // Validate frequency-specific requirements
+    if (frequency === 'weekly' && (!delivery_days || delivery_days.length === 0)) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Weekly subscriptions require delivery_days' 
+      });
+    }
+
+    if (frequency === 'monthly' && !delivery_date) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Monthly subscriptions require delivery_date' 
+      });
+    }
+
+    // Verify product exists and is active
+    const product = await db('products')
+      .where({ id: product_id, status: 'active' })
+      .first();
+
+    if (!product) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Product not found or not available for subscription' 
+      });
+    }
+
+    // Calculate next delivery date
+    const nextDelivery = calculateNextDelivery(start_date, frequency, delivery_days, delivery_date);
+
+    // Create subscription
+    const [subscription] = await db('subscriptions')
+      .insert({
+        user_id: userId,
+        product_id,
+        quantity,
+        frequency,
+        delivery_days: delivery_days ? JSON.stringify(delivery_days) : null,
+        delivery_date,
+        start_date,
+        next_delivery: nextDelivery,
+        delivery_time_slot,
+        notes,
+        status: 'active'
+      })
+      .returning('*');
+
+    // Fetch the created subscription with product details
+    const createdSubscription = await db('subscriptions')
+      .select(
+        'subscriptions.*',
+        'products.name as product_name',
+        'products.price as product_price',
+        'products.unit as product_unit',
+        'products.image_url as product_image'
+      )
+      .leftJoin('products', 'subscriptions.product_id', 'products.id')
+      .where('subscriptions.id', subscription.id)
+      .first();
+
+    const formattedSubscription = {
+      id: createdSubscription.id,
+      user_id: createdSubscription.user_id,
+      product_id: createdSubscription.product_id,
+      product: {
+        id: createdSubscription.product_id,
+        name: createdSubscription.product_name,
+        price: createdSubscription.product_price,
+        unit: createdSubscription.product_unit,
+        image_url: createdSubscription.product_image
+      },
+      quantity: createdSubscription.quantity,
+      frequency: createdSubscription.frequency,
+      delivery_days: createdSubscription.delivery_days ? JSON.parse(createdSubscription.delivery_days) : null,
+      delivery_date: createdSubscription.delivery_date,
+      delivery_time_slot: createdSubscription.delivery_time_slot,
+      start_date: createdSubscription.start_date,
+      end_date: createdSubscription.end_date,
+      next_delivery: createdSubscription.next_delivery,
+      status: createdSubscription.status,
+      notes: createdSubscription.notes,
+      created_at: createdSubscription.created_at,
+      updated_at: createdSubscription.updated_at
+    };
+
+    res.status(201).json({ 
+      success: true,
+      message: 'Subscription created successfully',
+      data: formattedSubscription 
+    });
+  } catch (error) {
+    console.error('Create subscription error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to create subscription' 
+    });
+  }
+});
+
+// Update subscription
+router.put('/:id', [
+  authenticate,
+  body('quantity').optional().isInt({ min: 1 }),
+  body('frequency').optional().isIn(['daily', 'weekly', 'monthly']),
+  body('delivery_days').optional().isArray(),
+  body('delivery_date').optional().isInt({ min: 1, max: 31 }),
+  body('delivery_time_slot').optional().isString(),
+  body('status').optional().isIn(['active', 'paused', 'cancelled']),
+  body('notes').optional().isString(),
+  body('end_date').optional().isISO8601()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const userId = req.user.id;
+    const subscriptionId = req.params.id;
+    const updateData = req.body;
+
+    // Check if subscription exists and belongs to user
+    const existingSubscription = await db('subscriptions')
+      .where({ id: subscriptionId, user_id: userId })
+      .first();
+
+    if (!existingSubscription) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Subscription not found' 
+      });
+    }
+
+    // Update subscription
+    await db('subscriptions')
+      .where({ id: subscriptionId })
+      .update({
+        ...updateData,
+        updated_at: new Date()
+      });
+
+    // Fetch updated subscription with product details
+    const updatedSubscription = await db('subscriptions')
+      .select(
+        'subscriptions.*',
+        'products.name as product_name',
+        'products.price as product_price',
+        'products.unit as product_unit',
+        'products.image_url as product_image'
+      )
+      .leftJoin('products', 'subscriptions.product_id', 'products.id')
+      .where('subscriptions.id', subscriptionId)
+      .first();
+
+    const formattedSubscription = {
+      id: updatedSubscription.id,
+      user_id: updatedSubscription.user_id,
+      product_id: updatedSubscription.product_id,
+      product: updatedSubscription.product_name ? {
+        id: updatedSubscription.product_id,
+        name: updatedSubscription.product_name,
+        price: updatedSubscription.product_price,
+        unit: updatedSubscription.product_unit,
+        image_url: updatedSubscription.product_image
+      } : null,
+      quantity: updatedSubscription.quantity,
+      frequency: updatedSubscription.frequency,
+      delivery_days: updatedSubscription.delivery_days ? JSON.parse(updatedSubscription.delivery_days) : null,
+      delivery_date: updatedSubscription.delivery_date,
+      delivery_time_slot: updatedSubscription.delivery_time_slot,
+      start_date: updatedSubscription.start_date,
+      end_date: updatedSubscription.end_date,
+      next_delivery: updatedSubscription.next_delivery,
+      status: updatedSubscription.status,
+      notes: updatedSubscription.notes,
+      created_at: updatedSubscription.created_at,
+      updated_at: updatedSubscription.updated_at
+    };
+
+    res.json({ 
+      success: true,
+      message: 'Subscription updated successfully',
+      data: formattedSubscription 
+    });
+  } catch (error) {
+    console.error('Update subscription error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to update subscription' 
+    });
+  }
+});
+
+// Pause subscription
+router.post('/:id/pause', authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const subscriptionId = req.params.id;
+
+    const subscription = await db('subscriptions')
+      .where({ id: subscriptionId, user_id: userId })
+      .first();
+
+    if (!subscription) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Subscription not found' 
+      });
+    }
+
+    await db('subscriptions')
+      .where({ id: subscriptionId })
+      .update({ status: 'paused', updated_at: new Date() });
+
+    res.json({ 
+      success: true,
+      message: 'Subscription paused successfully' 
+    });
+  } catch (error) {
+    console.error('Pause subscription error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to pause subscription' 
+    });
+  }
+});
+
+// Resume subscription
+router.post('/:id/resume', authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const subscriptionId = req.params.id;
+
+    const subscription = await db('subscriptions')
+      .where({ id: subscriptionId, user_id: userId })
+      .first();
+
+    if (!subscription) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Subscription not found' 
+      });
+    }
+
+    await db('subscriptions')
+      .where({ id: subscriptionId })
+      .update({ status: 'active', updated_at: new Date() });
+
+    res.json({ 
+      success: true,
+      message: 'Subscription resumed successfully' 
+    });
+  } catch (error) {
+    console.error('Resume subscription error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to resume subscription' 
+    });
+  }
+});
+
+// Cancel subscription
+router.post('/:id/cancel', authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const subscriptionId = req.params.id;
+
+    const subscription = await db('subscriptions')
+      .where({ id: subscriptionId, user_id: userId })
+      .first();
+
+    if (!subscription) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Subscription not found' 
+      });
+    }
+
+    await db('subscriptions')
+      .where({ id: subscriptionId })
+      .update({ status: 'cancelled', updated_at: new Date() });
+
+    res.json({ 
+      success: true,
+      message: 'Subscription cancelled successfully' 
+    });
+  } catch (error) {
+    console.error('Cancel subscription error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to cancel subscription' 
+    });
+  }
+});
 
 module.exports = router;

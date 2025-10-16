@@ -14,8 +14,27 @@ export interface OtpResponse {
 export const authService = {
   // Send OTP to phone number
   sendOtp: async (phone: string): Promise<OtpResponse> => {
-    const response = await api.post<ApiResponse<OtpResponse>>('/auth/send-otp', { phone });
-    return response.data.data || { phone, message: response.data.message || 'OTP sent' };
+    try {
+      const response = await api.post<ApiResponse<OtpResponse>>('/auth/send-otp', { phone });
+      console.log('Raw OTP response:', response.data);
+      
+      // Handle different response formats
+      if (response.data.success === false) {
+        throw new Error(response.data.message || 'Failed to send OTP');
+      }
+      
+      return response.data.data || { phone, message: response.data.message || 'OTP sent' };
+    } catch (error: any) {
+      console.error('sendOtp service error:', error);
+      
+      // If it's an axios error, extract the response data
+      if (error.response) {
+        throw new Error(error.response.data?.message || 'Failed to send OTP');
+      }
+      
+      // Re-throw the original error
+      throw error;
+    }
   },
 
   // Verify OTP and login
@@ -25,8 +44,8 @@ export const authService = {
       throw new Error(response.data.message || 'Invalid OTP');
     }
     return {
-      token: response.data.data?.token || '',
-      user: response.data.data?.user || {} as User
+      token: response.data.token || '',
+      user: response.data.user || {} as User
     };
   },
 

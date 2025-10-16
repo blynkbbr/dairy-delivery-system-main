@@ -76,11 +76,19 @@ export const useCartStore = create<CartStore>()(
           const existingItem = state.items.find(item => item.product.id === product.id);
           
           if (existingItem) {
-            const updatedItems = state.items.map(item =>
-              item.product.id === product.id
-                ? { ...item, quantity: item.quantity + quantity }
-                : item
-            );
+            const newQuantity = existingItem.quantity + quantity;
+            let updatedItems;
+            
+            if (newQuantity <= 0) {
+              // Remove item if quantity becomes 0 or negative
+              updatedItems = state.items.filter(item => item.product.id !== product.id);
+            } else {
+              updatedItems = state.items.map(item =>
+                item.product.id === product.id
+                  ? { ...item, quantity: newQuantity }
+                  : item
+              );
+            }
             
             return {
               ...state,
@@ -88,7 +96,7 @@ export const useCartStore = create<CartStore>()(
               total: updatedItems.reduce((sum, item) => sum + (item.product.price * item.quantity), 0),
               itemCount: updatedItems.reduce((sum, item) => sum + item.quantity, 0),
             };
-          } else {
+          } else if (quantity > 0) {
             const updatedItems = [...state.items, { product, quantity }];
             
             return {
@@ -98,6 +106,9 @@ export const useCartStore = create<CartStore>()(
               itemCount: updatedItems.reduce((sum, item) => sum + item.quantity, 0),
             };
           }
+          
+          // If quantity is 0 or negative and item doesn't exist, do nothing
+          return state;
         });
       },
       

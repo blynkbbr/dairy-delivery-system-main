@@ -7,12 +7,15 @@ import { useAuthStore } from './store/index.ts';
 import LandingPage from './pages/LandingPage.tsx';
 import LoginPage from './pages/LoginPage.tsx';
 import AdminLoginPage from './pages/AdminLoginPage.tsx';
+import ProfileSetupPage from './pages/ProfileSetupPage.tsx';
 import DashboardPage from './pages/DashboardPage.tsx';
 import ProductsPage from './pages/ProductsPage.tsx';
 import CartPage from './pages/CartPage.tsx';
 import OrdersPage from './pages/OrdersPage.tsx';
+import SubscriptionsPage from './pages/SubscriptionsPage.tsx';
 import ProfilePage from './pages/ProfilePage.tsx';
 import AdminDashboard from './pages/AdminDashboard.tsx';
+import AgentDashboard from './pages/AgentDashboard.tsx';
 
 // Components
 import LoadingScreen from './components/LoadingScreen.tsx';
@@ -28,7 +31,7 @@ function App() {
 
   return (
     <div className="App">
-      <Router>
+      <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
           {/* Public Routes */}
           <Route path="/" element={<LandingPage />} />
@@ -36,11 +39,13 @@ function App() {
             path="/login" 
             element={
               isAuthenticated ? (
-                user?.role === 'admin' ? <Navigate to="/admin" replace /> : <Navigate to="/dashboard" replace />
+                user?.role === 'admin' ? <Navigate to="/admin" replace /> : 
+                user?.role === 'agent' ? <Navigate to="/agent" replace /> : 
+                <Navigate to="/dashboard" replace />
               ) : (
                 <LoginPage />
               )
-            } 
+            }
           />
           <Route 
             path="/admin-login" 
@@ -49,6 +54,16 @@ function App() {
                 <Navigate to="/admin" replace />
               ) : (
                 <AdminLoginPage />
+              )
+            } 
+          />
+          <Route 
+            path="/profile-setup" 
+            element={
+              isAuthenticated ? (
+                <ProfileSetupPage />
+              ) : (
+                <Navigate to="/login" replace />
               )
             } 
           />
@@ -87,6 +102,14 @@ function App() {
             } 
           />
           <Route 
+            path="/subscriptions" 
+            element={
+              <ProtectedRoute>
+                <SubscriptionsPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
             path="/profile" 
             element={
               <ProtectedRoute>
@@ -101,6 +124,16 @@ function App() {
             element={
               <ProtectedRoute adminOnly>
                 <AdminDashboard />
+              </ProtectedRoute>
+            } 
+          />
+
+          {/* Protected Agent Routes */}
+          <Route 
+            path="/agent/*" 
+            element={
+              <ProtectedRoute agentOnly>
+                <AgentDashboard />
               </ProtectedRoute>
             } 
           />

@@ -7,6 +7,9 @@ require('dotenv').config();
 
 const app = express();
 
+// Trust proxy (required for rate limiting and X-Forwarded-For headers)
+app.set('trust proxy', 1);
+
 // Security middleware
 app.use(helmet());
 app.use(cors({
@@ -30,6 +33,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api/user', require('./routes/user'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/products', require('./routes/products'));
 app.use('/api/orders', require('./routes/orders'));
@@ -38,6 +42,7 @@ app.use('/api/deliveries', require('./routes/deliveries'));
 app.use('/api/routes', require('./routes/routes'));
 app.use('/api/billing', require('./routes/billing'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/agent', require('./routes/agent'));
 
 // Health check endpoint
 app.get('/health', (req, res) => {

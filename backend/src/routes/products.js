@@ -11,19 +11,20 @@ const router = express.Router();
  */
 router.get('/', [
   optionalAuth,
-  query('is_milk').optional().isBoolean(),
+  query('category').optional().isString(),
   query('limit').optional().isInt({ min: 1, max: 100 }),
   query('offset').optional().isInt({ min: 0 })
 ], async (req, res) => {
   try {
-    const { is_milk, limit = 50, offset = 0 } = req.query;
+    
+    const { category, limit = 50, offset = 0 } = req.query;
     
     let query = db('products')
       .select('*')
       .where({ status: 'active' });
     
-    if (is_milk !== undefined) {
-      query = query.where({ is_milk: is_milk === 'true' });
+    if (category) {
+      query = query.where({ category });
     }
     
     const products = await query
@@ -36,8 +37,8 @@ router.get('/', [
       .count('id as total')
       .where({ status: 'active' });
     
-    if (is_milk !== undefined) {
-      countQuery = countQuery.where({ is_milk: is_milk === 'true' });
+    if (category) {
+      countQuery = countQuery.where({ category });
     }
     
     const totalResult = await countQuery.first();
@@ -45,7 +46,7 @@ router.get('/', [
 
     res.json({
       success: true,
-      products,
+      data: products,
       pagination: {
         total,
         limit: parseInt(limit),
@@ -62,29 +63,6 @@ router.get('/', [
   }
 });
 
-/**
- * Get milk products (for subscription)
- * GET /api/products/milk
- */
-router.get('/milk', optionalAuth, async (req, res) => {
-  try {
-    const milkProducts = await db('products')
-      .select('*')
-      .where({ status: 'active', is_milk: true })
-      .orderBy('name', 'asc');
-
-    res.json({
-      success: true,
-      products: milkProducts
-    });
-  } catch (error) {
-    console.error('Get milk products error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
-  }
-});
 
 /**
  * Get single product by ID
@@ -107,7 +85,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
 
     res.json({
       success: true,
-      product
+      data: product
     });
   } catch (error) {
     console.error('Get product error:', error);
@@ -142,7 +120,7 @@ router.get('/search/:query', [
 
     res.json({
       success: true,
-      products,
+      data: products,
       query: searchQuery
     });
   } catch (error) {

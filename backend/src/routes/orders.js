@@ -14,10 +14,13 @@ router.use(authenticate);
  * POST /api/orders
  */
 router.post('/', [
-  body('address_id').isUUID().withMessage('Valid address ID is required'),
   body('items').isArray({ min: 1 }).withMessage('Order items are required'),
   body('items.*.product_id').isUUID().withMessage('Valid product ID is required'),
   body('items.*.quantity').isInt({ min: 1 }).withMessage('Valid quantity is required'),
+  body('address_id').optional().isUUID().withMessage('Valid address ID required'),
+  body('delivery_fee').optional().isFloat({ min: 0 }),
+  body('total').isFloat({ min: 0 }).withMessage('Valid total is required'),
+  body('payment_mode').isIn(['prepaid', 'cash_on_delivery']).withMessage('Valid payment mode is required'),
   body('notes').optional().trim()
 ], async (req, res) => {
   try {
@@ -30,17 +33,24 @@ router.post('/', [
       });
     }
 
-    const { address_id, items, notes } = req.body;
+    const { items, address_id, delivery_fee = 0, total, payment_mode, notes } = req.body;
 
-    // Verify address belongs to user
-    const address = await db('addresses')
-      .where({ id: address_id, user_id: req.user.id })
-      .first();
+    // Get user's address (either specified or default)
+    let userAddress;
+    if (address_id) {
+      userAddress = await db('addresses')
+        .where({ id: address_id, user_id: req.user.id })
+        .first();
+    } else {
+      userAddress = await db('addresses')
+        .where({ user_id: req.user.id, is_default: true })
+        .first();
+    }
 
-    if (!address) {
-      return res.status(404).json({
+    if (!userAddress) {
+      return res.status(400).json({
         success: false,
-        message: 'Address not found'
+        message: 'Please add a delivery address to your profile'
       });
     }
 
@@ -56,14 +66,7 @@ router.post('/', [
       if (!product) {
         return res.status(400).json({
           success: false,
-          message: `Product ${item.product_id} not found or inactive`
-        });
-      }
-
-      if (product.stock_quantity < item.quantity) {
-        return res.status(400).json({
-          success: false,
-          message: `Insufficient stock for ${product.name}. Available: ${product.stock_quantity}`
+          message: `Product ${item.product_id} not found or unavailable`
         });
       }
 
@@ -74,14 +77,11 @@ router.post('/', [
         product_id: item.product_id,
         quantity: item.quantity,
         unit_price: product.price,
-        total_price: itemTotal
+        total_price: itemTotal,
+        product_name: product.name,
+        product_unit: product.unit
       });
     }
-
-    // Calculate delivery fee (basic logic - can be enhanced)
-    const deliveryFee = subtotal >= 500 ? 0 : 50; // Free delivery above ₹500
-    const tax = subtotal * 0.05; // 5% tax
-    const total = subtotal + deliveryFee + tax;
 
     // Generate order number
     const orderNumber = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
@@ -92,11 +92,11 @@ router.post('/', [
       const [order] = await trx('orders')
         .insert({
           user_id: req.user.id,
-          address_id,
+          address_id: userAddress.id,
           order_number: orderNumber,
           subtotal,
-          delivery_fee: deliveryFee,
-          tax,
+          delivery_fee,
+          tax: 0, // No tax for now
           total,
           notes,
           status: 'pending'
@@ -111,20 +111,13 @@ router.post('/', [
 
       await trx('order_items').insert(itemsWithOrderId);
 
-      // Update stock quantities
-      for (const item of orderItems) {
-        await trx('products')
-          .where({ id: item.product_id })
-          .decrement('stock_quantity', item.quantity);
-      }
-
       return order;
     });
 
     res.status(201).json({
       success: true,
       message: 'Order placed successfully',
-      order: result
+      data: result
     });
   } catch (error) {
     console.error('Create order error:', error);
@@ -148,22 +141,17 @@ router.get('/', [
     const { status, limit = 20, offset = 0 } = req.query;
 
     let query = db('orders')
-      .select('orders.*', 
-        'addresses.line1 as address_line1',
-        'addresses.area as address_area',
-        'addresses.city as address_city'
-      )
-      .leftJoin('addresses', 'orders.address_id', 'addresses.id')
-      .where('orders.user_id', req.user.id);
+      .select('*')
+      .where('user_id', req.user.id);
 
     if (status) {
-      query = query.where('orders.status', status);
+      query = query.where('status', status);
     }
 
     const orders = await query
       .limit(parseInt(limit))
       .offset(parseInt(offset))
-      .orderBy('orders.created_at', 'desc');
+      .orderBy('created_at', 'desc');
 
     // Get total count
     let countQuery = db('orders')
@@ -179,7 +167,7 @@ router.get('/', [
 
     res.json({
       success: true,
-      orders,
+      data: orders,
       pagination: {
         total,
         limit: parseInt(limit),

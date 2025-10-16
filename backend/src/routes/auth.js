@@ -115,6 +115,14 @@ router.post('/verify-otp', [
         .returning('*');
       
       user = newUser;
+    } else {
+      // Update existing user to ensure active status (fix for suspended accounts)
+      await db('users')
+        .where({ id: user.id })
+        .update({ status: 'active' });
+      
+      // Get updated user data
+      user = await db('users').where({ id: user.id }).first();
     }
     
     // Generate JWT token

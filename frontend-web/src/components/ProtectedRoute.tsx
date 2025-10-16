@@ -6,9 +6,10 @@ import LoadingScreen from './LoadingScreen.tsx';
 interface ProtectedRouteProps {
   children: React.ReactNode;
   adminOnly?: boolean;
+  agentOnly?: boolean;
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, adminOnly = false }) => {
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, adminOnly = false, agentOnly = false }) => {
   const { isAuthenticated, user, isLoading } = useAuthStore();
   const location = useLocation();
 
@@ -23,6 +24,11 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, adminOnly = f
 
   if (adminOnly && user?.role !== 'admin') {
     // Redirect to dashboard if not admin
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  if (agentOnly && user?.role !== 'agent') {
+    // Redirect to dashboard if not agent
     return <Navigate to="/dashboard" replace />;
   }
 

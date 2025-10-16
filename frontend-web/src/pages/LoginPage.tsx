@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -28,53 +28,87 @@ const otpSchema = yup.object({
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const { login, setLoading, isLoading } = useAuthStore();
-  const [step, setStep] = useState<'phone' | 'otp'>('phone');
+  const { login } = useAuthStore();
+  
+  // Use local state instead of global state to prevent re-renders
+  const [isLoading, setIsLoading] = useState(false);
+  const [showOtpInput, setShowOtpInput] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState('');
-
-  const phoneForm = useForm<{ phone: string }>({
-    resolver: yupResolver(phoneSchema),
-  });
-
-  const otpForm = useForm<LoginFormData>({
-    resolver: yupResolver(otpSchema),
+  const [otpSent, setOtpSent] = useState(false);
+  
+  // Use ref to persist state across potential re-renders
+  const stateRef = useRef({ showOtpInput: false, phoneNumber: '', otpSent: false });
+  
+  // Update ref when state changes
+  useEffect(() => {
+    stateRef.current = { showOtpInput, phoneNumber, otpSent };
+    console.log('State updated:', stateRef.current);
+  }, [showOtpInput, phoneNumber, otpSent]);
+  
+  const combinedForm = useForm<LoginFormData>({
+    resolver: yupResolver(showOtpInput ? otpSchema : phoneSchema),
     defaultValues: {
-      phone: phoneNumber,
+      phone: '',
+      otp: '',
     },
   });
 
-  const handleSendOtp = async (data: { phone: string }) => {
+  const handleSendOtp = async (phone: string) => {
     try {
-      setLoading(true);
-      await authService.sendOtp(data.phone);
-      setPhoneNumber(data.phone);
-      setStep('otp');
-      otpForm.setValue('phone', data.phone);
-      toast.success('OTP sent successfully! Check console in development mode.');
+      setIsLoading(true);
+      const result = await authService.sendOtp(phone);
+      
+      // Update state to show OTP input
+      setPhoneNumber(phone);
+      setOtpSent(true);
+      setShowOtpInput(true);
+      
+      // Update form with phone number for OTP verification
+      combinedForm.setValue('phone', phone);
+      
+      toast.success('OTP sent successfully! Please enter the OTP below.');
+      
     } catch (error: any) {
-      toast.error(error.message || 'Failed to send OTP');
+      toast.error(error.response?.data?.message || error.message || 'Failed to send OTP');
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
   const handleVerifyOtp = async (data: LoginFormData) => {
     try {
-      setLoading(true);
+      setIsLoading(true);
       const response = await authService.verifyOtp(data);
+      
       login(response.user, response.token);
       toast.success(`Welcome ${response.user.full_name || 'back'}!`);
       
-      // Redirect based on role
+      // Redirect based on role or collect profile if new user
       if (response.user.role === 'admin') {
         navigate('/admin');
+      } else if (response.user.role === 'agent') {
+        navigate('/agent');
+      } else if (!response.user.full_name || !response.user.email) {
+        // User needs to complete profile
+        navigate('/profile-setup');
       } else {
         navigate('/dashboard');
       }
     } catch (error: any) {
-      toast.error(error.message || 'Invalid OTP');
+      const errorMessage = error.response?.data?.message || error.message || 'Invalid OTP';
+      toast.error(errorMessage);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
+    }
+  };
+  
+  const handleFormSubmit = async (data: LoginFormData) => {
+    if (!showOtpInput) {
+      // Send OTP
+      await handleSendOtp(data.phone);
+    } else {
+      // Verify OTP
+      await handleVerifyOtp(data);
     }
   };
 
@@ -98,9 +132,9 @@ const LoginPage: React.FC = () => {
           </div>
           
           <p className="text-gray-600">
-            {step === 'phone' 
+            {!showOtpInput 
               ? 'Enter your phone number to get started'
-              : 'Enter the OTP sent to your phone'
+              : `Enter the OTP sent to ${phoneNumber}`
             }
           </p>
         </motion.div>
@@ -112,102 +146,94 @@ const LoginPage: React.FC = () => {
           transition={{ delay: 0.1 }}
           className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8"
         >
-          {step === 'phone' ? (
-            <form onSubmit={phoneForm.handleSubmit(handleSendOtp)} className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Phone Number
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Phone className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    {...phoneForm.register('phone')}
-                    type="tel"
-                    placeholder="Enter 10-digit phone number"
-                    className={`input pl-10 ${phoneForm.formState.errors.phone ? 'input-error' : ''}`}
-                  />
+          <form onSubmit={combinedForm.handleSubmit(handleFormSubmit)} className="space-y-6">
+            {/* Phone Number Input */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Phone Number
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Phone className="h-5 w-5 text-gray-400" />
                 </div>
-                {phoneForm.formState.errors.phone && (
-                  <p className="mt-1 text-sm text-red-600">
-                    {phoneForm.formState.errors.phone.message}
-                  </p>
-                )}
+                <input
+                  {...combinedForm.register('phone')}
+                  type="tel"
+                  placeholder="Enter 10-digit phone number"
+                  disabled={showOtpInput}
+                  className={`input pl-10 ${combinedForm.formState.errors.phone ? 'input-error' : ''} ${showOtpInput ? 'bg-gray-100' : ''}`}
+                />
               </div>
+              {combinedForm.formState.errors.phone && (
+                <p className="mt-1 text-sm text-red-600">
+                  {combinedForm.formState.errors.phone.message}
+                </p>
+              )}
+            </div>
 
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full btn-primary btn-lg"
-              >
-                {isLoading ? (
-                  <>
-                    <div className="spinner mr-2" />
-                    Sending OTP...
-                  </>
-                ) : (
-                  'Send OTP'
-                )}
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={otpForm.handleSubmit(handleVerifyOtp)} className="space-y-6">
+            {/* OTP Input - Show only after OTP is sent */}
+            {showOtpInput && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Enter OTP
                 </label>
-                <p className="text-sm text-gray-500 mb-3">
-                  OTP sent to {phoneNumber}
-                </p>
                 <input
-                  {...otpForm.register('otp')}
+                  {...combinedForm.register('otp')}
                   type="text"
                   maxLength={6}
                   placeholder="Enter 6-digit OTP"
-                  className={`input text-center text-2xl tracking-widest ${otpForm.formState.errors.otp ? 'input-error' : ''}`}
+                  className={`input text-center text-2xl tracking-widest ${combinedForm.formState.errors.otp ? 'input-error' : ''}`}
                 />
-                {otpForm.formState.errors.otp && (
+                {combinedForm.formState.errors.otp && (
                   <p className="mt-1 text-sm text-red-600">
-                    {otpForm.formState.errors.otp.message}
+                    {combinedForm.formState.errors.otp.message}
                   </p>
                 )}
               </div>
+            )}
 
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full btn-primary btn-lg"
+            >
+              {isLoading ? (
+                <>
+                  <div className="spinner mr-2" />
+                  {showOtpInput ? 'Verifying...' : 'Sending OTP...'}
+                </>
+              ) : (
+                showOtpInput ? 'Verify OTP' : 'Send OTP'
+              )}
+            </button>
+
+            {/* Additional buttons for OTP step */}
+            {showOtpInput && (
               <div className="flex gap-3">
                 <button
                   type="button"
-                  onClick={() => setStep('phone')}
+                  onClick={() => {
+                    setShowOtpInput(false);
+                    setOtpSent(false);
+                    setPhoneNumber('');
+                    combinedForm.reset();
+                  }}
                   className="flex-1 btn-secondary"
                 >
                   Change Number
                 </button>
                 <button
-                  type="submit"
+                  type="button"
+                  onClick={() => handleSendOtp(phoneNumber)}
                   disabled={isLoading}
-                  className="flex-1 btn-primary"
+                  className="flex-1 text-sm text-primary-600 hover:text-primary-700 font-medium"
                 >
-                  {isLoading ? (
-                    <>
-                      <div className="spinner mr-2" />
-                      Verifying...
-                    </>
-                  ) : (
-                    'Verify OTP'
-                  )}
+                  Resend OTP
                 </button>
               </div>
-
-              <button
-                type="button"
-                onClick={() => handleSendOtp({ phone: phoneNumber })}
-                disabled={isLoading}
-                className="w-full text-sm text-primary-600 hover:text-primary-700 font-medium"
-              >
-                Resend OTP
-              </button>
-            </form>
-          )}
+            )}
+          </form>
 
           {/* Features */}
           <div className="mt-8 pt-8 border-t border-gray-200">
