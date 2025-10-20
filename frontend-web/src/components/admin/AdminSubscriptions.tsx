@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  Calendar, 
-  Search, 
-  Filter, 
-  Eye, 
-  Pause, 
-  Play, 
-  XCircle, 
+import {
+  Calendar,
+  Search,
+  Filter,
+  Eye,
+  Pause,
+  Play,
+  XCircle,
   CheckCircle,
   AlertCircle,
   Clock,
@@ -15,6 +15,7 @@ import {
   Package
 } from 'lucide-react';
 import api from '../../services/api.ts';
+import actionTracker from '../../utils/actionTracker';
 
 interface Subscription {
   id: string;
@@ -48,6 +49,7 @@ const AdminSubscriptions: React.FC = () => {
   const [frequencyFilter, setFrequencyFilter] = useState('all');
 
   useEffect(() => {
+    actionTracker.trackPageView('admin_subscriptions');
     loadSubscriptions();
   }, []);
 
@@ -91,11 +93,23 @@ const AdminSubscriptions: React.FC = () => {
   const handleUpdateStatus = async (id: string, status: 'active' | 'paused' | 'cancelled') => {
     try {
       await api.put(`/admin/subscriptions/${id}`, { status });
-      setSubscriptions(prev => 
+      actionTracker.trackAction('subscription_status_update', {
+        component: 'AdminSubscriptions',
+        subscriptionId: id,
+        newStatus: status,
+        page: 'admin_subscriptions'
+      });
+      setSubscriptions(prev =>
         prev.map(sub => sub.id === id ? { ...sub, status } : sub)
       );
     } catch (error) {
       console.error('Update subscription status error:', error);
+      actionTracker.trackAction('subscription_status_update_failed', {
+        component: 'AdminSubscriptions',
+        subscriptionId: id,
+        attemptedStatus: status,
+        error: (error as Error).message
+      });
     }
   };
 
@@ -371,7 +385,11 @@ const AdminSubscriptions: React.FC = () => {
                         </button>
                       )}
                       
-                      <button className="text-blue-600 hover:text-blue-900" title="View details">
+                      <button
+                        onClick={() => actionTracker.trackClick('view_subscription_button', 'admin_subscriptions', { component: 'AdminSubscriptions', subscriptionId: subscription.id })}
+                        className="text-blue-600 hover:text-blue-900"
+                        title="View details"
+                      >
                         <Eye className="h-4 w-4" />
                       </button>
                     </div>

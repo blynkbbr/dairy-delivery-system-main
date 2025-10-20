@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
-import { 
-  Package, 
-  ShoppingCart, 
-  TrendingUp, 
+import {
+  Package,
+  ShoppingCart,
+  TrendingUp,
   Calendar,
   MapPin,
   CreditCard,
@@ -22,6 +22,7 @@ import { orderService } from '../services/order.ts';
 import { productService } from '../services/product.ts';
 import { subscriptionService } from '../services/subscription.ts';
 import { Order, Product, Subscription } from '../types';
+import actionTracker from '../utils/actionTracker';
 
 const DashboardPage: React.FC = () => {
   const { user, logout } = useAuthStore();
@@ -38,6 +39,7 @@ const DashboardPage: React.FC = () => {
   });
 
   useEffect(() => {
+    actionTracker.trackPageView('dashboard');
     loadDashboardData();
   }, []);
 
@@ -53,7 +55,8 @@ const DashboardPage: React.FC = () => {
       setStats({
         totalOrders: orders.length,
         pendingOrders: orders.filter(o => ['pending', 'confirmed', 'processing'].includes(o.status)).length,
-        totalSpent: orders.reduce((sum, order) => sum + parseFloat(order.total.toString()), 0)
+        totalSpent: orders.reduce((sum, order) => sum + parseFloat(order.total.toString()), 0),
+        activeSubscriptions: 0 // Will be updated below
       });
       
       // Load featured products
@@ -113,9 +116,10 @@ const DashboardPage: React.FC = () => {
               </div>
               
               {cartCount > 0 && (
-                <Link 
+                <Link
                   to="/cart"
                   className="flex items-center gap-2 bg-primary-100 hover:bg-primary-200 text-primary-700 px-4 py-2 rounded-full transition-colors"
+                  onClick={() => actionTracker.trackNavigation('dashboard', 'cart')}
                 >
                   <ShoppingCart className="h-4 w-4" />
                   <span>{cartCount} item{cartCount !== 1 ? 's' : ''} in cart</span>
@@ -208,7 +212,7 @@ const DashboardPage: React.FC = () => {
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-gray-900">Recent Orders</h2>
-                <Link to="/orders" className="text-primary-600 hover:text-primary-700 text-sm font-medium">
+                <Link to="/orders" className="text-primary-600 hover:text-primary-700 text-sm font-medium" onClick={() => actionTracker.trackNavigation('dashboard', 'orders')}>
                   View all
                 </Link>
               </div>
@@ -219,7 +223,7 @@ const DashboardPage: React.FC = () => {
                 <div className="text-center py-8">
                   <Package className="h-12 w-12 mx-auto text-gray-400 mb-3" />
                   <p className="text-gray-600">No orders yet</p>
-                  <Link to="/products" className="text-primary-600 hover:text-primary-700 text-sm font-medium mt-2 inline-block">
+                  <Link to="/products" className="text-primary-600 hover:text-primary-700 text-sm font-medium mt-2 inline-block" onClick={() => actionTracker.trackNavigation('dashboard', 'products')}>
                     Start shopping →
                   </Link>
                 </div>
@@ -238,9 +242,10 @@ const DashboardPage: React.FC = () => {
                           ₹{parseFloat(order.total.toString()).toFixed(2)} • {order.items?.length || 0} items
                         </p>
                       </div>
-                      <Link 
+                      <Link
                         to={`/orders/${order.id}`}
                         className="text-primary-600 hover:text-primary-700 p-1"
+                        onClick={() => actionTracker.trackNavigation('dashboard', 'order_details', { orderId: order.id })}
                       >
                         <ArrowRight className="h-4 w-4" />
                       </Link>
@@ -275,7 +280,7 @@ const DashboardPage: React.FC = () => {
                 </div>
               </div>
               {(!user?.full_name || !user?.address) && (
-                <Link to="/profile-setup" className="mt-4 block w-full btn-primary text-center">
+                <Link to="/profile-setup" className="mt-4 block w-full btn-primary text-center" onClick={() => actionTracker.trackNavigation('dashboard', 'profile_setup')}>
                   Complete Profile
                 </Link>
               )}
@@ -285,28 +290,31 @@ const DashboardPage: React.FC = () => {
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-3">
-                <Link to="/products" className="flex flex-col items-center gap-2 p-4 bg-primary-50 hover:bg-primary-100 rounded-lg transition-colors">
+                <Link to="/products" className="flex flex-col items-center gap-2 p-4 bg-primary-50 hover:bg-primary-100 rounded-lg transition-colors" onClick={() => actionTracker.trackNavigation('dashboard', 'products')}>
                   <ShoppingCart className="h-6 w-6 text-primary-600" />
                   <span className="text-sm font-medium text-primary-700">Shop Now</span>
                 </Link>
-                
-                <Link to="/orders" className="flex flex-col items-center gap-2 p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
+
+                <Link to="/orders" className="flex flex-col items-center gap-2 p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors" onClick={() => actionTracker.trackNavigation('dashboard', 'orders')}>
                   <Package className="h-6 w-6 text-blue-600" />
                   <span className="text-sm font-medium text-blue-700">My Orders</span>
                 </Link>
-                
-                <Link to="/subscriptions" className="flex flex-col items-center gap-2 p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors">
+
+                <Link to="/subscriptions" className="flex flex-col items-center gap-2 p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors" onClick={() => actionTracker.trackNavigation('dashboard', 'subscriptions')}>
                   <Calendar className="h-6 w-6 text-purple-600" />
                   <span className="text-sm font-medium text-purple-700">Subscriptions</span>
                 </Link>
-                
-                <Link to="/profile" className="flex flex-col items-center gap-2 p-4 bg-green-50 hover:bg-green-100 rounded-lg transition-colors">
+
+                <Link to="/profile" className="flex flex-col items-center gap-2 p-4 bg-green-50 hover:bg-green-100 rounded-lg transition-colors" onClick={() => actionTracker.trackNavigation('dashboard', 'profile')}>
                   <MapPin className="h-6 w-6 text-green-600" />
                   <span className="text-sm font-medium text-green-700">Profile</span>
                 </Link>
-                
-                <button 
-                  onClick={logout}
+
+                <button
+                  onClick={() => {
+                    actionTracker.trackAction('logout', { page: 'dashboard' });
+                    logout();
+                  }}
                   className="flex flex-col items-center gap-2 p-4 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   <Clock className="h-6 w-6 text-gray-600" />
@@ -328,7 +336,7 @@ const DashboardPage: React.FC = () => {
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-gray-900">Featured Products</h2>
-                <Link to="/products" className="text-primary-600 hover:text-primary-700 text-sm font-medium">
+                <Link to="/products" className="text-primary-600 hover:text-primary-700 text-sm font-medium" onClick={() => actionTracker.trackNavigation('dashboard', 'products')}>
                   View all
                 </Link>
               </div>

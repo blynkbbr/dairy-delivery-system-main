@@ -1,18 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  Users, 
-  ShoppingCart, 
-  Package, 
-  TrendingUp, 
-  Calendar, 
+import {
+  Users,
+  ShoppingCart,
+  Package,
+  TrendingUp,
+  Calendar,
   DollarSign,
   ArrowUp,
-  ArrowDown 
+  ArrowDown
 } from 'lucide-react';
 
 import { orderService } from '../../services/order.ts';
 import { productService } from '../../services/product.ts';
+import actionTracker from '../../utils/actionTracker';
 
 interface AnalyticsData {
   totalUsers: number;
@@ -39,6 +40,7 @@ const AdminAnalytics: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    actionTracker.trackPageView('admin_analytics');
     loadAnalyticsData();
   }, []);
 
@@ -279,7 +281,10 @@ const AdminAnalytics: React.FC = () => {
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <button className="flex items-center gap-3 p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors text-left">
+          <button
+            onClick={() => actionTracker.trackClick('manage_users_button', 'admin_analytics', { component: 'AdminAnalytics' })}
+            className="flex items-center gap-3 p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors text-left"
+          >
             <Users className="h-8 w-8 text-blue-600" />
             <div>
               <p className="font-medium text-blue-900">Manage Users</p>
@@ -287,7 +292,10 @@ const AdminAnalytics: React.FC = () => {
             </div>
           </button>
           
-          <button className="flex items-center gap-3 p-4 bg-green-50 hover:bg-green-100 rounded-lg transition-colors text-left">
+          <button
+            onClick={() => actionTracker.trackClick('process_orders_button', 'admin_analytics', { component: 'AdminAnalytics' })}
+            className="flex items-center gap-3 p-4 bg-green-50 hover:bg-green-100 rounded-lg transition-colors text-left"
+          >
             <ShoppingCart className="h-8 w-8 text-green-600" />
             <div>
               <p className="font-medium text-green-900">Process Orders</p>
@@ -295,7 +303,10 @@ const AdminAnalytics: React.FC = () => {
             </div>
           </button>
           
-          <button className="flex items-center gap-3 p-4 bg-yellow-50 hover:bg-yellow-100 rounded-lg transition-colors text-left">
+          <button
+            onClick={() => actionTracker.trackClick('manage_products_button', 'admin_analytics', { component: 'AdminAnalytics' })}
+            className="flex items-center gap-3 p-4 bg-yellow-50 hover:bg-yellow-100 rounded-lg transition-colors text-left"
+          >
             <Package className="h-8 w-8 text-yellow-600" />
             <div>
               <p className="font-medium text-yellow-900">Manage Products</p>
@@ -303,7 +314,10 @@ const AdminAnalytics: React.FC = () => {
             </div>
           </button>
           
-          <button className="flex items-center gap-3 p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors text-left">
+          <button
+            onClick={() => actionTracker.trackClick('view_reports_button', 'admin_analytics', { component: 'AdminAnalytics' })}
+            className="flex items-center gap-3 p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors text-left"
+          >
             <TrendingUp className="h-8 w-8 text-purple-600" />
             <div>
               <p className="font-medium text-purple-900">View Reports</p>

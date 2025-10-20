@@ -2,14 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
-import { 
-  Plus, 
-  Calendar, 
-  Package, 
-  Pause, 
-  Play, 
-  Trash2, 
-  Clock, 
+import {
+  Plus,
+  Calendar,
+  Package,
+  Pause,
+  Play,
+  Trash2,
+  Clock,
   Edit,
   Filter,
   CheckCircle,
@@ -22,6 +22,7 @@ import { productService } from '../services/product.ts';
 import { Subscription, Product } from '../types';
 import CreateSubscriptionModal from '../components/CreateSubscriptionModal.tsx';
 import EditSubscriptionModal from '../components/EditSubscriptionModal.tsx';
+import actionTracker from '../utils/actionTracker';
 
 const SubscriptionsPage: React.FC = () => {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
@@ -32,6 +33,7 @@ const SubscriptionsPage: React.FC = () => {
   const [editingSubscription, setEditingSubscription] = useState<Subscription | null>(null);
 
   useEffect(() => {
+    actionTracker.trackPageView('subscriptions');
     loadSubscriptions();
     loadProducts();
   }, [statusFilter]);
@@ -68,6 +70,7 @@ const SubscriptionsPage: React.FC = () => {
   const handlePauseSubscription = async (id: string) => {
     try {
       await subscriptionService.pauseSubscription(parseInt(id));
+      actionTracker.trackSubscriptionAction('update', id, { action: 'pause' });
       toast.success('Subscription paused');
       loadSubscriptions();
     } catch (error: any) {
@@ -78,6 +81,7 @@ const SubscriptionsPage: React.FC = () => {
   const handleResumeSubscription = async (id: string) => {
     try {
       await subscriptionService.resumeSubscription(parseInt(id));
+      actionTracker.trackSubscriptionAction('update', id, { action: 'resume' });
       toast.success('Subscription resumed');
       loadSubscriptions();
     } catch (error: any) {
@@ -86,12 +90,13 @@ const SubscriptionsPage: React.FC = () => {
   };
 
   const handleCancelSubscription = async (id: string) => {
-    if (!confirm('Are you sure you want to cancel this subscription?')) {
+    if (!window.confirm('Are you sure you want to cancel this subscription?')) {
       return;
     }
 
     try {
       await subscriptionService.cancelSubscription(parseInt(id));
+      actionTracker.trackSubscriptionAction('cancel', id);
       toast.success('Subscription cancelled');
       loadSubscriptions();
     } catch (error: any) {
@@ -190,7 +195,10 @@ const SubscriptionsPage: React.FC = () => {
               </div>
               
               <button
-                onClick={() => setShowCreateModal(true)}
+                onClick={() => {
+                  setShowCreateModal(true);
+                  actionTracker.trackClick('new_subscription_button', 'subscriptions');
+                }}
                 className="flex items-center gap-2 btn-primary"
               >
                 <Plus className="h-4 w-4" />
@@ -217,7 +225,10 @@ const SubscriptionsPage: React.FC = () => {
               ].map((filter) => (
                 <button
                   key={filter.value}
-                  onClick={() => setStatusFilter(filter.value)}
+                  onClick={() => {
+                    setStatusFilter(filter.value);
+                    actionTracker.trackClick('status_filter', 'subscriptions', { filter: filter.value });
+                  }}
                   className={`px-4 py-2 text-sm rounded-full transition-colors ${
                     statusFilter === filter.value
                       ? 'bg-primary-100 text-primary-700 font-medium'
@@ -242,7 +253,10 @@ const SubscriptionsPage: React.FC = () => {
               Set up recurring deliveries for your favorite dairy products
             </p>
             <button
-              onClick={() => setShowCreateModal(true)}
+              onClick={() => {
+                setShowCreateModal(true);
+                actionTracker.trackClick('create_first_subscription', 'subscriptions');
+              }}
               className="btn-primary"
             >
               Create Your First Subscription
@@ -319,7 +333,10 @@ const SubscriptionsPage: React.FC = () => {
                     {/* Actions */}
                     <div className="flex items-center gap-2 ml-6">
                       <button
-                        onClick={() => setEditingSubscription(subscription)}
+                        onClick={() => {
+                          setEditingSubscription(subscription);
+                          actionTracker.trackClick('edit_subscription', 'subscriptions', { subscriptionId: subscription.id });
+                        }}
                         className="p-2 text-gray-600 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
                         title="Edit subscription"
                       >

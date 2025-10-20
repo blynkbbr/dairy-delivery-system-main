@@ -3,6 +3,9 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { initializeCronJobs } = require('./services/cronJobs');
+const requestLogger = require('./middleware/requestLogger');
+const performanceMonitor = require('./middleware/performanceMonitor');
+const logger = require('./utils/logger');
 require('dotenv').config();
 
 const app = express();
@@ -10,10 +13,16 @@ const app = express();
 // Trust proxy (required for rate limiting and X-Forwarded-For headers)
 app.set('trust proxy', 1);
 
+// Request logging middleware (must be first)
+app.use(requestLogger);
+
+// Performance monitoring middleware
+app.use(performanceMonitor);
+
 // Security middleware
 app.use(helmet());
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
+  origin: process.env.NODE_ENV === 'production'
     ? ['https://your-domain.com', 'https://admin.your-domain.com']
     : ['http://localhost:3001', 'http://localhost:19006'], // React and React Native
   credentials: true
@@ -33,7 +42,6 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));
-app.use('/api/user', require('./routes/user'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/products', require('./routes/products'));
 app.use('/api/orders', require('./routes/orders'));
@@ -43,6 +51,7 @@ app.use('/api/routes', require('./routes/routes'));
 app.use('/api/billing', require('./routes/billing'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/agent', require('./routes/agent'));
+app.use('/api/actions', require('./routes/actions'));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -60,19 +69,40 @@ app.use('*', (req, res) => {
 
 // Global error handler
 app.use((error, req, res, next) => {
-  console.error('Global error handler:', error);
-  
+  const userId = req.user?.id || 'anonymous';
+  const { method, url, ip } = req;
+
+  // Log the error with context
+  logger.error(`Error in ${method} ${url}`, {
+    error: {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    },
+    request: {
+      method,
+      url,
+      ip,
+      userId,
+      userAgent: req.headers['user-agent'],
+      body: req.body,
+      query: req.query,
+      params: req.params,
+    },
+    timestamp: new Date().toISOString(),
+  });
+
   if (error.name === 'ValidationError') {
-    return res.status(400).json({ 
-      message: 'Validation Error', 
-      errors: error.details 
+    return res.status(400).json({
+      message: 'Validation Error',
+      errors: error.details
     });
   }
-  
+
   if (error.name === 'UnauthorizedError') {
     return res.status(401).json({ message: 'Unauthorized' });
   }
-  
+
   res.status(error.status || 500).json({
     message: error.message || 'Internal Server Error',
     ...(process.env.NODE_ENV === 'development' && { stack: error.stack })

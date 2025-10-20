@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { X, Plus, Minus } from 'lucide-react';
 
 import { subscriptionService, UpdateSubscriptionData } from '../services/subscription.ts';
 import { Subscription, Product } from '../types';
+import actionTracker from '../utils/actionTracker';
 
 interface EditSubscriptionModalProps {
   subscription: Subscription;
@@ -20,6 +21,14 @@ const EditSubscriptionModal: React.FC<EditSubscriptionModalProps> = ({
   onSuccess
 }) => {
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    actionTracker.trackAction('modal_open', {
+      component: 'EditSubscriptionModal',
+      page: window.location.pathname,
+      subscriptionId: subscription.id
+    });
+  }, [subscription.id]);
   const [formData, setFormData] = useState<UpdateSubscriptionData>({
     quantity: subscription.quantity,
     frequency: subscription.frequency,
@@ -52,7 +61,7 @@ const EditSubscriptionModal: React.FC<EditSubscriptionModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (formData.frequency === 'weekly' && (!formData.delivery_days || formData.delivery_days.length === 0)) {
       toast.error('Please select at least one delivery day for weekly subscriptions');
       return;
@@ -61,10 +70,22 @@ const EditSubscriptionModal: React.FC<EditSubscriptionModalProps> = ({
     setLoading(true);
     try {
       await subscriptionService.updateSubscription(parseInt(subscription.id), formData);
+      actionTracker.trackFormSubmit('edit_subscription_form', window.location.pathname, {
+        component: 'EditSubscriptionModal',
+        subscriptionId: subscription.id,
+        frequency: formData.frequency,
+        quantity: formData.quantity,
+        status: formData.status
+      });
       toast.success('Subscription updated successfully');
       onSuccess();
     } catch (error: any) {
       console.error('Update subscription error:', error);
+      actionTracker.trackAction('subscription_update_failed', {
+        component: 'EditSubscriptionModal',
+        subscriptionId: subscription.id,
+        error: error.response?.data?.error || error.message
+      });
       toast.error(error.response?.data?.error || 'Failed to update subscription');
     } finally {
       setLoading(false);
@@ -104,7 +125,13 @@ const EditSubscriptionModal: React.FC<EditSubscriptionModalProps> = ({
             <p className="text-gray-600 mt-1">Modify your recurring delivery settings</p>
           </div>
           <button
-            onClick={onClose}
+            onClick={() => {
+              actionTracker.trackClick('close_modal_button', window.location.pathname, {
+                component: 'EditSubscriptionModal',
+                subscriptionId: subscription.id
+              });
+              onClose();
+            }}
             className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <X className="h-5 w-5" />
@@ -132,7 +159,14 @@ const EditSubscriptionModal: React.FC<EditSubscriptionModalProps> = ({
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={() => setFormData({ ...formData, quantity: Math.max(1, (formData.quantity || 1) - 1) })}
+                onClick={() => {
+                  actionTracker.trackClick('quantity_decrease_button', window.location.pathname, {
+                    component: 'EditSubscriptionModal',
+                    subscriptionId: subscription.id,
+                    currentQuantity: formData.quantity
+                  });
+                  setFormData({ ...formData, quantity: Math.max(1, (formData.quantity || 1) - 1) });
+                }}
                 className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50"
               >
                 <Minus className="h-4 w-4" />
@@ -149,7 +183,14 @@ const EditSubscriptionModal: React.FC<EditSubscriptionModalProps> = ({
               
               <button
                 type="button"
-                onClick={() => setFormData({ ...formData, quantity: (formData.quantity || 1) + 1 })}
+                onClick={() => {
+                  actionTracker.trackClick('quantity_increase_button', window.location.pathname, {
+                    component: 'EditSubscriptionModal',
+                    subscriptionId: subscription.id,
+                    currentQuantity: formData.quantity
+                  });
+                  setFormData({ ...formData, quantity: (formData.quantity || 1) + 1 });
+                }}
                 className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50"
               >
                 <Plus className="h-4 w-4" />
@@ -177,12 +218,20 @@ const EditSubscriptionModal: React.FC<EditSubscriptionModalProps> = ({
                 <button
                   key={freq.value}
                   type="button"
-                  onClick={() => setFormData({ 
-                    ...formData, 
-                    frequency: freq.value as 'daily' | 'weekly' | 'monthly',
-                    delivery_days: freq.value === 'weekly' ? (formData.delivery_days || []) : undefined,
-                    delivery_date: freq.value === 'monthly' ? (formData.delivery_date || 1) : undefined
-                  })}
+                  onClick={() => {
+                    actionTracker.trackClick('frequency_selection_button', window.location.pathname, {
+                      component: 'EditSubscriptionModal',
+                      subscriptionId: subscription.id,
+                      selectedFrequency: freq.value,
+                      previousFrequency: formData.frequency
+                    });
+                    setFormData({
+                      ...formData,
+                      frequency: freq.value as 'daily' | 'weekly' | 'monthly',
+                      delivery_days: freq.value === 'weekly' ? (formData.delivery_days || []) : undefined,
+                      delivery_date: freq.value === 'monthly' ? (formData.delivery_date || 1) : undefined
+                    });
+                  }}
                   className={`p-3 border rounded-lg text-center transition-colors ${
                     formData.frequency === freq.value
                       ? 'border-primary-500 bg-primary-50 text-primary-700'
@@ -206,7 +255,15 @@ const EditSubscriptionModal: React.FC<EditSubscriptionModalProps> = ({
                   <button
                     key={day.value}
                     type="button"
-                    onClick={() => handleDayToggle(day.value)}
+                    onClick={() => {
+                      actionTracker.trackClick('delivery_day_toggle_button', window.location.pathname, {
+                        component: 'EditSubscriptionModal',
+                        subscriptionId: subscription.id,
+                        day: day.value,
+                        action: formData.delivery_days?.includes(day.value) ? 'remove' : 'add'
+                      });
+                      handleDayToggle(day.value);
+                    }}
                     className={`p-2 text-sm border rounded-lg text-center transition-colors ${
                       formData.delivery_days?.includes(day.value)
                         ? 'border-primary-500 bg-primary-50 text-primary-700'
@@ -333,7 +390,13 @@ const EditSubscriptionModal: React.FC<EditSubscriptionModalProps> = ({
           <div className="flex justify-end gap-3 pt-4">
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => {
+                actionTracker.trackClick('cancel_subscription_button', window.location.pathname, {
+                  component: 'EditSubscriptionModal',
+                  subscriptionId: subscription.id
+                });
+                onClose();
+              }}
               className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
             >
               Cancel

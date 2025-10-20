@@ -37,7 +37,9 @@
     "node-cron": "^3.0.2",
     "pg": "^8.11.3",
     "twilio": "^4.15.0",
-    "uuid": "^9.0.0"
+    "uuid": "^9.0.0",
+    "winston": "^3.18.3",
+    "winston-daily-rotate-file": "^5.0.0"
   },
   "devDependencies": {
     "@types/jest": "^29.5.5",

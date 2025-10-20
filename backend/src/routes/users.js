@@ -2,6 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const db = require('../utils/database');
 const { authenticate } = require('../middleware/auth');
+const { logUserAction } = require('../utils/actionLogger');
 
 const router = express.Router();
 
@@ -80,6 +81,12 @@ router.put('/profile', [
       .select('id', 'phone', 'email', 'full_name', 'role', 'status', 'prepaid_balance', 'payment_mode', 'profile_image')
       .where({ id: req.user.id })
       .first();
+
+    // Log user action
+    logUserAction('profile_update', {
+      updatedFields: Object.keys(updateData),
+      userId: req.user.id,
+    }, req);
 
     res.json({
       success: true,
@@ -178,6 +185,13 @@ router.post('/addresses', [
       })
       .returning('*');
 
+    // Log user action
+    logUserAction('address_add', {
+      addressId: newAddress.id,
+      isDefault: shouldBeDefault,
+      userId: req.user.id,
+    }, req);
+
     res.status(201).json({
       success: true,
       message: 'Address added successfully',
@@ -249,6 +263,13 @@ router.put('/addresses/:id', [
       .where({ id })
       .first();
 
+    // Log user action
+    logUserAction('address_update', {
+      addressId: id,
+      updatedFields: Object.keys(updateData),
+      userId: req.user.id,
+    }, req);
+
     res.json({
       success: true,
       message: 'Address updated successfully',
@@ -298,6 +319,13 @@ router.delete('/addresses/:id', async (req, res) => {
           .update({ is_default: true });
       }
     }
+
+    // Log user action
+    logUserAction('address_delete', {
+      addressId: id,
+      wasDefault: address.is_default,
+      userId: req.user.id,
+    }, req);
 
     res.json({
       success: true,

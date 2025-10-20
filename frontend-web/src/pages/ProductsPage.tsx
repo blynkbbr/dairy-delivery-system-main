@@ -6,6 +6,7 @@ import { ShoppingCart, Plus, Minus, Shield, Clock } from 'lucide-react';
 import { useCartStore } from '../store/index.ts';
 import { productService } from '../services/product.ts';
 import { Product } from '../types';
+import actionTracker from '../utils/actionTracker';
 
 const ProductsPage: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -23,6 +24,7 @@ const ProductsPage: React.FC = () => {
   ];
 
   useEffect(() => {
+    actionTracker.trackPageView('products');
     fetchProducts();
   }, []);
 
@@ -44,6 +46,7 @@ const ProductsPage: React.FC = () => {
 
   const handleAddToCart = (product: Product) => {
     addItem(product);
+    actionTracker.trackCartAction('add', product.id.toString(), 1, { productName: product.name, page: 'products' });
     toast.success(`${product.name} added to cart!`);
   };
 
@@ -106,18 +109,24 @@ const ProductsPage: React.FC = () => {
           ) : (
             <div className="flex items-center justify-between bg-primary-50 rounded-lg p-2">
               <button
-                onClick={() => addItem(product, -1)}
+                onClick={() => {
+                  addItem(product, -1);
+                  actionTracker.trackCartAction('remove', product.id.toString(), 1, { productName: product.name, page: 'products' });
+                }}
                 className="w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center text-primary-600 hover:bg-primary-100 transition-colors"
               >
                 <Minus className="h-4 w-4" />
               </button>
-              
+
               <span className="font-semibold text-primary-800">
                 {cartQuantity} in cart
               </span>
-              
+
               <button
-                onClick={() => addItem(product, 1)}
+                onClick={() => {
+                  addItem(product, 1);
+                  actionTracker.trackCartAction('add', product.id.toString(), 1, { productName: product.name, page: 'products' });
+                }}
                 className="w-8 h-8 rounded-full bg-primary-600 text-white flex items-center justify-center hover:bg-primary-700 transition-colors"
               >
                 <Plus className="h-4 w-4" />
@@ -159,7 +168,10 @@ const ProductsPage: React.FC = () => {
             {categories.map((category) => (
               <button
                 key={category.id}
-                onClick={() => setSelectedCategory(category.id)}
+                onClick={() => {
+                  setSelectedCategory(category.id);
+                  actionTracker.trackClick('category_filter', 'products', { category: category.id });
+                }}
                 className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                   selectedCategory === category.id
                     ? 'bg-primary-600 text-white'

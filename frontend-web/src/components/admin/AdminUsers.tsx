@@ -1,10 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Search, Plus, Edit, Trash2, MoreVertical, Filter } from 'lucide-react';
+import actionTracker from '../../utils/actionTracker';
 
 const AdminUsers: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+
+  useEffect(() => {
+    actionTracker.trackPageView('admin_users');
+  }, []);
 
   // Mock user data
   const users = [
@@ -69,7 +74,10 @@ const AdminUsers: React.FC = () => {
           <h2 className="text-2xl font-bold text-gray-900">User Management</h2>
           <p className="text-gray-600">Manage users and their permissions</p>
         </div>
-        <button className="flex items-center gap-2 btn-primary">
+        <button
+          onClick={() => actionTracker.trackClick('add_user_button', 'admin_users', { component: 'AdminUsers' })}
+          className="flex items-center gap-2 btn-primary"
+        >
           <Plus className="h-4 w-4" />
           Add User
         </button>
@@ -171,13 +179,22 @@ const AdminUsers: React.FC = () => {
                   
                   <td className="py-4 px-6 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <button className="p-2 text-gray-600 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors">
+                      <button
+                        onClick={() => actionTracker.trackClick('edit_user_button', 'admin_users', { component: 'AdminUsers', userId: user.id })}
+                        className="p-2 text-gray-600 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                      >
                         <Edit className="h-4 w-4" />
                       </button>
-                      <button className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                      <button
+                        onClick={() => actionTracker.trackClick('delete_user_button', 'admin_users', { component: 'AdminUsers', userId: user.id })}
+                        className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      >
                         <Trash2 className="h-4 w-4" />
                       </button>
-                      <button className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors">
+                      <button
+                        onClick={() => actionTracker.trackClick('more_user_actions_button', 'admin_users', { component: 'AdminUsers', userId: user.id })}
+                        className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+                      >
                         <MoreVertical className="h-4 w-4" />
                       </button>
                     </div>
