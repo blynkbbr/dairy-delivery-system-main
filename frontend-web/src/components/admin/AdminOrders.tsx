@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Search, Filter, Eye, Edit, MoreVertical, Package, Truck, Check, X } from 'lucide-react';
 import { orderService } from '../../services/order.ts';
 import { Order } from '../../types';
+import actionTracker from '../../utils/actionTracker';
 
 const AdminOrders: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -11,6 +12,7 @@ const AdminOrders: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState('all');
 
   useEffect(() => {
+    actionTracker.trackPageView('admin_orders');
     loadOrders();
   }, []);
 
@@ -184,13 +186,24 @@ const AdminOrders: React.FC = () => {
                   
                   <td className="py-4 px-6 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <button className="p-2 text-gray-600 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors" title="View details">
+                      <button
+                        onClick={() => actionTracker.trackClick('view_order_button', 'admin_orders', { component: 'AdminOrders', orderId: order.id })}
+                        className="p-2 text-gray-600 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                        title="View details"
+                      >
                         <Eye className="h-4 w-4" />
                       </button>
-                      <button className="p-2 text-gray-600 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors" title="Edit order">
+                      <button
+                        onClick={() => actionTracker.trackClick('edit_order_button', 'admin_orders', { component: 'AdminOrders', orderId: order.id })}
+                        className="p-2 text-gray-600 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                        title="Edit order"
+                      >
                         <Edit className="h-4 w-4" />
                       </button>
-                      <button className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors">
+                      <button
+                        onClick={() => actionTracker.trackClick('more_actions_button', 'admin_orders', { component: 'AdminOrders', orderId: order.id })}
+                        className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+                      >
                         <MoreVertical className="h-4 w-4" />
                       </button>
                     </div>

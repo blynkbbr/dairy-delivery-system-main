@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
-import { 
-  User, 
-  Mail, 
-  Phone, 
-  MapPin, 
-  Edit, 
-  Save, 
-  X, 
+import {
+  User,
+  Mail,
+  Phone,
+  MapPin,
+  Edit,
+  Save,
+  X,
   Plus,
   Trash2,
   Home,
@@ -20,6 +20,7 @@ import {
 
 import { useAuthStore } from '../store/index.ts';
 import api from '../services/api.ts';
+import actionTracker from '../utils/actionTracker';
 
 interface Address {
   id: string;
@@ -68,14 +69,26 @@ const ProfilePage: React.FC = () => {
   });
 
   useEffect(() => {
+    actionTracker.trackPageView('profile');
     loadProfile();
+    loadAddresses();
   }, []);
+
+  const loadAddresses = async () => {
+    try {
+      const response = await api.get('/users/addresses');
+      const addressesData = response.data.addresses || response.data;
+      setProfile(prev => prev ? { ...prev, addresses: addressesData } : null);
+    } catch (error: any) {
+      console.error('Load addresses error:', error);
+    }
+  };
 
   const loadProfile = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/user/profile');
-      const profileData = response.data.data || response.data;
+      const response = await api.get('/users/profile');
+      const profileData = response.data.user || response.data;
       setProfile(profileData);
       setProfileForm({
         full_name: profileData.full_name || '',
@@ -92,7 +105,8 @@ const ProfilePage: React.FC = () => {
 
   const handleUpdateProfile = async () => {
     try {
-      await api.put('/user/profile', profileForm);
+      await api.put('/users/profile', profileForm);
+      actionTracker.trackFormSubmit('update_profile_form', 'profile');
       toast.success('Profile updated successfully');
       setEditing(false);
       loadProfile();
@@ -103,7 +117,8 @@ const ProfilePage: React.FC = () => {
 
   const handleAddAddress = async () => {
     try {
-      await api.post('/user/addresses', addressForm);
+      await api.post('/users/addresses', addressForm);
+      actionTracker.trackFormSubmit('add_address_form', 'profile');
       toast.success('Address added successfully');
       setAddingAddress(false);
       setAddressForm({
@@ -116,7 +131,7 @@ const ProfilePage: React.FC = () => {
         landmark: '',
         is_default: false
       });
-      loadProfile();
+      loadAddresses();
     } catch (error: any) {
       toast.error('Failed to add address');
     }
@@ -124,24 +139,26 @@ const ProfilePage: React.FC = () => {
 
   const handleUpdateAddress = async (id: string, data: Partial<Address>) => {
     try {
-      await api.put(`/user/addresses/${id}`, data);
+      await api.put(`/users/addresses/${id}`, data);
+      actionTracker.trackAction('update_address', { addressId: id, page: 'profile' });
       toast.success('Address updated successfully');
       setEditingAddress(null);
-      loadProfile();
+      loadAddresses();
     } catch (error: any) {
       toast.error('Failed to update address');
     }
   };
 
   const handleDeleteAddress = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this address?')) {
+    if (!window.confirm('Are you sure you want to delete this address?')) {
       return;
     }
-    
+
     try {
-      await api.delete(`/user/addresses/${id}`);
+      await api.delete(`/users/addresses/${id}`);
+      actionTracker.trackAction('delete_address', { addressId: id, page: 'profile' });
       toast.success('Address deleted successfully');
-      loadProfile();
+      loadAddresses();
     } catch (error: any) {
       toast.error('Failed to delete address');
     }
@@ -150,6 +167,7 @@ const ProfilePage: React.FC = () => {
   const handleSetDefaultAddress = async (id: string) => {
     try {
       await api.put(`/user/addresses/${id}`, { is_default: true });
+      actionTracker.trackAction('set_default_address', { addressId: id, page: 'profile' });
       toast.success('Default address updated');
       loadProfile();
     } catch (error: any) {
@@ -270,7 +288,10 @@ const ProfilePage: React.FC = () => {
               <h2 className="text-lg font-semibold text-gray-900">Personal Information</h2>
               {!editing ? (
                 <button
-                  onClick={() => setEditing(true)}
+                  onClick={() => {
+                    setEditing(true);
+                    actionTracker.trackClick('edit_profile_button', 'profile');
+                  }}
                   className="flex items-center gap-2 text-primary-600 hover:text-primary-700"
                 >
                   <Edit className="h-4 w-4" />
@@ -373,7 +394,10 @@ const ProfilePage: React.FC = () => {
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-semibold text-gray-900">Delivery Addresses</h2>
               <button
-                onClick={() => setAddingAddress(true)}
+                onClick={() => {
+                  setAddingAddress(true);
+                  actionTracker.trackClick('add_address_button', 'profile');
+                }}
                 className="flex items-center gap-2 btn-primary"
               >
                 <Plus className="h-4 w-4" />
@@ -514,17 +538,29 @@ const ProfilePage: React.FC = () => {
                       <div className="flex items-center gap-2">
                         {!address.is_default && (
                           <button
-                            onClick={() => handleSetDefaultAddress(address.id)}
+                            onClick={() => {
+                              handleSetDefaultAddress(address.id);
+                              actionTracker.trackClick('set_default_address_button', 'profile', { addressId: address.id });
+                            }}
                             className="text-sm text-primary-600 hover:text-primary-700"
                           >
                             Set Default
                           </button>
                         )}
-                        <button className="text-gray-600 hover:text-gray-800">
+                        <button
+                          onClick={() => {
+                            setEditingAddress(address.id);
+                            actionTracker.trackClick('edit_address_button', 'profile', { addressId: address.id });
+                          }}
+                          className="text-gray-600 hover:text-gray-800"
+                        >
                           <Edit className="h-4 w-4" />
                         </button>
-                        <button 
-                          onClick={() => handleDeleteAddress(address.id)}
+                        <button
+                          onClick={() => {
+                            handleDeleteAddress(address.id);
+                            actionTracker.trackClick('delete_address_button', 'profile', { addressId: address.id });
+                          }}
                           className="text-red-600 hover:text-red-800"
                         >
                           <Trash2 className="h-4 w-4" />

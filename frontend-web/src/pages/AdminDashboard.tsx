@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { 
-  LayoutDashboard, 
-  Users, 
-  Package, 
-  ShoppingCart, 
+import {
+  LayoutDashboard,
+  Users,
+  Package,
+  ShoppingCart,
   Calendar,
-  TrendingUp, 
+  TrendingUp,
   LogOut,
   Menu,
   X
@@ -19,11 +19,16 @@ import AdminUsers from '../components/admin/AdminUsers.tsx';
 import AdminProducts from '../components/admin/AdminProducts.tsx';
 import AdminOrders from '../components/admin/AdminOrders.tsx';
 import AdminSubscriptions from '../components/admin/AdminSubscriptions.tsx';
+import actionTracker from '../utils/actionTracker';
 
 const AdminDashboard: React.FC = () => {
   const { user, logout } = useAuthStore();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    actionTracker.trackPageView('admin_dashboard');
+  }, []);
 
   const navigation = [
     { 
@@ -92,7 +97,10 @@ const AdminDashboard: React.FC = () => {
                 <Link
                   key={item.name}
                   to={item.href}
-                  onClick={() => setSidebarOpen(false)}
+                  onClick={() => {
+                    setSidebarOpen(false);
+                    actionTracker.trackNavigation('admin_dashboard', item.href.replace('/admin/', ''));
+                  }}
                   className={`group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
                     active
                       ? 'bg-primary-600 text-white'
@@ -122,7 +130,10 @@ const AdminDashboard: React.FC = () => {
             </div>
           </div>
           <button
-            onClick={logout}
+            onClick={() => {
+              actionTracker.trackAction('logout', { page: 'admin_dashboard' });
+              logout();
+            }}
             className="flex items-center w-full px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white rounded-lg transition-colors"
           >
             <LogOut className="mr-3 h-5 w-5" />

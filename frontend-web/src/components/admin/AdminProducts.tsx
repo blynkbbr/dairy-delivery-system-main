@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Search, Plus, Edit, Trash2, MoreVertical, Eye, EyeOff } from 'lucide-react';
 import { productService } from '../../services/product.ts';
 import { Product } from '../../types';
+import actionTracker from '../../utils/actionTracker';
 
 const AdminProducts: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -11,6 +12,7 @@ const AdminProducts: React.FC = () => {
   const [filterCategory, setFilterCategory] = useState('all');
 
   useEffect(() => {
+    actionTracker.trackPageView('admin_products');
     loadProducts();
   }, []);
 
@@ -50,7 +52,10 @@ const AdminProducts: React.FC = () => {
           <h2 className="text-2xl font-bold text-gray-900">Product Management</h2>
           <p className="text-gray-600">Manage your dairy product catalog</p>
         </div>
-        <button className="flex items-center gap-2 btn-primary">
+        <button
+          onClick={() => actionTracker.trackClick('add_product_button', 'admin_products', { component: 'AdminProducts' })}
+          className="flex items-center gap-2 btn-primary"
+        >
           <Plus className="h-4 w-4" />
           Add Product
         </button>
@@ -144,11 +149,17 @@ const AdminProducts: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-2">
-                <button className="flex-1 text-sm text-primary-600 hover:text-primary-700 border border-primary-200 hover:border-primary-300 rounded-lg py-2 px-3 transition-colors">
+                <button
+                  onClick={() => actionTracker.trackClick('edit_product_button', 'admin_products', { component: 'AdminProducts', productId: product.id })}
+                  className="flex-1 text-sm text-primary-600 hover:text-primary-700 border border-primary-200 hover:border-primary-300 rounded-lg py-2 px-3 transition-colors"
+                >
                   <Edit className="h-4 w-4 inline mr-1" />
                   Edit
                 </button>
-                <button className="text-sm text-red-600 hover:text-red-700 border border-red-200 hover:border-red-300 rounded-lg py-2 px-3 transition-colors">
+                <button
+                  onClick={() => actionTracker.trackClick('delete_product_button', 'admin_products', { component: 'AdminProducts', productId: product.id })}
+                  className="text-sm text-red-600 hover:text-red-700 border border-red-200 hover:border-red-300 rounded-lg py-2 px-3 transition-colors"
+                >
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>

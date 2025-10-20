@@ -107,6 +107,9 @@ export interface ApiResponse<T> {
   success: boolean;
   message?: string;
   data?: T;
+  user?: T;
+  addresses?: T;
+  address?: T;
   errors?: any[];
 }
 

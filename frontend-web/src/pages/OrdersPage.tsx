@@ -2,13 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
-import { 
-  Package, 
-  Clock, 
-  CheckCircle, 
-  XCircle, 
-  Truck, 
-  MapPin, 
+import {
+  Package,
+  Clock,
+  CheckCircle,
+  XCircle,
+  Truck,
+  MapPin,
   Calendar,
   CreditCard,
   Eye,
@@ -17,6 +17,7 @@ import {
 
 import { orderService } from '../services/order.ts';
 import { Order } from '../types';
+import actionTracker from '../utils/actionTracker';
 
 const OrdersPage: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -34,6 +35,7 @@ const OrdersPage: React.FC = () => {
   ];
 
   useEffect(() => {
+    actionTracker.trackPageView('orders');
     fetchOrders();
   }, []);
 
@@ -110,7 +112,10 @@ const OrdersPage: React.FC = () => {
             {statusOptions.map((status) => (
               <button
                 key={status.id}
-                onClick={() => setSelectedStatus(status.id)}
+                onClick={() => {
+                  setSelectedStatus(status.id);
+                  actionTracker.trackClick('status_filter', 'orders', { filter: status.id });
+                }}
                 className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                   selectedStatus === status.id
                     ? 'bg-primary-600 text-white'
@@ -142,7 +147,7 @@ const OrdersPage: React.FC = () => {
                 : `You don't have any ${selectedStatus} orders at the moment.`
               }
             </p>
-            <Link to="/products" className="btn-primary">
+            <Link to="/products" className="btn-primary" onClick={() => actionTracker.trackNavigation('orders', 'products')}>
               Browse Products
             </Link>
           </div>
@@ -235,6 +240,7 @@ const OrdersPage: React.FC = () => {
                         <Link
                           to={`/orders/${order.id}`}
                           className="flex items-center gap-1 px-3 py-1 text-sm text-primary-600 hover:text-primary-700 font-medium"
+                          onClick={() => actionTracker.trackNavigation('orders', 'order_details', { orderId: order.id })}
                         >
                           <Eye className="h-3 w-3" />
                           View Details
@@ -244,7 +250,8 @@ const OrdersPage: React.FC = () => {
                           <button
                             onClick={() => {
                               // Implement cancel order
-                              toast.info('Cancel order feature coming soon');
+                              actionTracker.trackClick('cancel_order_button', 'orders', { orderId: order.id });
+                              toast('Cancel order feature coming soon');
                             }}
                             className="flex items-center gap-1 px-3 py-1 text-sm text-red-600 hover:text-red-700 font-medium"
                           >
@@ -257,7 +264,8 @@ const OrdersPage: React.FC = () => {
                           <button
                             onClick={() => {
                               // Implement reorder
-                              toast.info('Reorder feature coming soon');
+                              actionTracker.trackClick('reorder_button', 'orders', { orderId: order.id });
+                              toast('Reorder feature coming soon');
                             }}
                             className="flex items-center gap-1 px-3 py-1 text-sm text-green-600 hover:text-green-700 font-medium"
                           >

@@ -2,13 +2,13 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
-import { 
-  ShoppingCart, 
-  Plus, 
-  Minus, 
-  Trash2, 
-  ArrowLeft, 
-  MapPin, 
+import {
+  ShoppingCart,
+  Plus,
+  Minus,
+  Trash2,
+  ArrowLeft,
+  MapPin,
   CreditCard,
   Truck,
   CheckCircle,
@@ -17,6 +17,7 @@ import {
 
 import { useCartStore, useAuthStore } from '../store/index.ts';
 import { orderService } from '../services/order.ts';
+import actionTracker from '../utils/actionTracker';
 
 const CartPage: React.FC = () => {
   const navigate = useNavigate();
@@ -24,6 +25,10 @@ const CartPage: React.FC = () => {
   const { items, total, addItem, removeItem, updateQuantity, clearCart } = useCartStore();
   const [isLoading, setIsLoading] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
+
+  React.useEffect(() => {
+    actionTracker.trackPageView('cart');
+  }, []);
   
   const deliveryFee = total >= 500 ? 0 : 50;
   const finalTotal = total + deliveryFee;
@@ -39,6 +44,7 @@ const CartPage: React.FC = () => {
   const handleCheckout = async () => {
     if (!user?.address || !user?.full_name) {
       toast.error('Please complete your profile first');
+      actionTracker.trackNavigation('cart', 'profile_setup');
       navigate('/profile-setup');
       return;
     }
@@ -55,12 +61,15 @@ const CartPage: React.FC = () => {
         total: finalTotal,
         payment_mode: user.payment_mode
       };
-      
+
       const order = await orderService.createOrder(orderData);
+      actionTracker.trackOrderAction('create', order.id.toString());
       clearCart();
       toast.success('Order placed successfully!');
+      actionTracker.trackNavigation('cart', 'order_details', { orderId: order.id });
       navigate(`/orders/${order.id}`);
     } catch (error: any) {
+      actionTracker.trackAction('order_creation_failed', { error: error.message });
       toast.error(error.message || 'Failed to place order');
     } finally {
       setIsLoading(false);
@@ -71,9 +80,10 @@ const CartPage: React.FC = () => {
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <Link 
-            to="/products" 
+          <Link
+            to="/products"
             className="inline-flex items-center text-primary-600 hover:text-primary-700 mb-6"
+            onClick={() => actionTracker.trackNavigation('cart', 'products')}
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
             Continue Shopping
@@ -83,9 +93,10 @@ const CartPage: React.FC = () => {
             <ShoppingCart className="h-16 w-16 mx-auto text-gray-400 mb-4" />
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Your cart is empty</h2>
             <p className="text-gray-600 mb-6">Add some fresh dairy products to get started!</p>
-            <Link 
-              to="/products" 
+            <Link
+              to="/products"
               className="btn-primary"
+              onClick={() => actionTracker.trackNavigation('cart', 'products')}
             >
               Browse Products
             </Link>
@@ -101,9 +112,10 @@ const CartPage: React.FC = () => {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
-            <Link 
-              to="/products" 
+            <Link
+              to="/products"
               className="inline-flex items-center text-primary-600 hover:text-primary-700"
+              onClick={() => actionTracker.trackNavigation('cart', 'products')}
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
               Continue Shopping
@@ -170,7 +182,10 @@ const CartPage: React.FC = () => {
                           ₹{(item.product.price * item.quantity).toFixed(2)}
                         </p>
                         <button
-                          onClick={() => removeItem(item.product.id)}
+                          onClick={() => {
+                            removeItem(item.product.id);
+                            actionTracker.trackCartAction('remove', item.product.id.toString(), item.quantity, { productName: item.product.name, page: 'cart' });
+                          }}
                           className="text-red-500 hover:text-red-700 text-sm mt-1 flex items-center gap-1"
                         >
                           <Trash2 className="h-3 w-3" />
@@ -259,7 +274,10 @@ const CartPage: React.FC = () => {
                 
                 {/* Checkout Button */}
                 <button
-                  onClick={handleCheckout}
+                  onClick={() => {
+                    actionTracker.trackClick('place_order_button', 'cart', { itemCount: items.length, total: finalTotal });
+                    handleCheckout();
+                  }}
                   disabled={isLoading || items.length === 0}
                   className="w-full btn-primary btn-lg"
                 >

@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { X, Calendar, Clock, Package, Plus, Minus } from 'lucide-react';
 
 import { subscriptionService, CreateSubscriptionData } from '../services/subscription.ts';
 import { Product } from '../types';
+import actionTracker from '../utils/actionTracker';
 
 interface CreateSubscriptionModalProps {
   products: Product[];
@@ -18,6 +19,13 @@ const CreateSubscriptionModal: React.FC<CreateSubscriptionModalProps> = ({
   onSuccess
 }) => {
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    actionTracker.trackAction('modal_open', {
+      component: 'CreateSubscriptionModal',
+      page: window.location.pathname
+    });
+  }, []);
   const [formData, setFormData] = useState<CreateSubscriptionData>({
     product_id: 0,
     quantity: 1,
@@ -50,7 +58,7 @@ const CreateSubscriptionModal: React.FC<CreateSubscriptionModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.product_id) {
       toast.error('Please select a product');
       return;
@@ -64,10 +72,20 @@ const CreateSubscriptionModal: React.FC<CreateSubscriptionModalProps> = ({
     setLoading(true);
     try {
       await subscriptionService.createSubscription(formData);
+      actionTracker.trackFormSubmit('create_subscription_form', window.location.pathname, {
+        component: 'CreateSubscriptionModal',
+        productId: formData.product_id,
+        frequency: formData.frequency,
+        quantity: formData.quantity
+      });
       toast.success('Subscription created successfully');
       onSuccess();
     } catch (error: any) {
       console.error('Create subscription error:', error);
+      actionTracker.trackAction('subscription_creation_failed', {
+        component: 'CreateSubscriptionModal',
+        error: error.response?.data?.error || error.message
+      });
       toast.error(error.response?.data?.error || 'Failed to create subscription');
     } finally {
       setLoading(false);
@@ -107,7 +125,12 @@ const CreateSubscriptionModal: React.FC<CreateSubscriptionModalProps> = ({
             <p className="text-gray-600 mt-1">Set up recurring delivery for your favorite products</p>
           </div>
           <button
-            onClick={onClose}
+            onClick={() => {
+              actionTracker.trackClick('close_modal_button', window.location.pathname, {
+                component: 'CreateSubscriptionModal'
+              });
+              onClose();
+            }}
             className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <X className="h-5 w-5" />
@@ -143,7 +166,13 @@ const CreateSubscriptionModal: React.FC<CreateSubscriptionModalProps> = ({
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={() => setFormData({ ...formData, quantity: Math.max(1, formData.quantity - 1) })}
+                onClick={() => {
+                  actionTracker.trackClick('quantity_decrease_button', window.location.pathname, {
+                    component: 'CreateSubscriptionModal',
+                    currentQuantity: formData.quantity
+                  });
+                  setFormData({ ...formData, quantity: Math.max(1, formData.quantity - 1) });
+                }}
                 className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50"
               >
                 <Minus className="h-4 w-4" />
@@ -160,7 +189,13 @@ const CreateSubscriptionModal: React.FC<CreateSubscriptionModalProps> = ({
               
               <button
                 type="button"
-                onClick={() => setFormData({ ...formData, quantity: formData.quantity + 1 })}
+                onClick={() => {
+                  actionTracker.trackClick('quantity_increase_button', window.location.pathname, {
+                    component: 'CreateSubscriptionModal',
+                    currentQuantity: formData.quantity
+                  });
+                  setFormData({ ...formData, quantity: formData.quantity + 1 });
+                }}
                 className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50"
               >
                 <Plus className="h-4 w-4" />
@@ -188,12 +223,19 @@ const CreateSubscriptionModal: React.FC<CreateSubscriptionModalProps> = ({
                 <button
                   key={freq.value}
                   type="button"
-                  onClick={() => setFormData({ 
-                    ...formData, 
-                    frequency: freq.value as 'daily' | 'weekly' | 'monthly',
-                    delivery_days: freq.value === 'weekly' ? [] : undefined,
-                    delivery_date: freq.value === 'monthly' ? 1 : undefined
-                  })}
+                  onClick={() => {
+                    actionTracker.trackClick('frequency_selection_button', window.location.pathname, {
+                      component: 'CreateSubscriptionModal',
+                      selectedFrequency: freq.value,
+                      previousFrequency: formData.frequency
+                    });
+                    setFormData({
+                      ...formData,
+                      frequency: freq.value as 'daily' | 'weekly' | 'monthly',
+                      delivery_days: freq.value === 'weekly' ? [] : undefined,
+                      delivery_date: freq.value === 'monthly' ? 1 : undefined
+                    });
+                  }}
                   className={`p-3 border rounded-lg text-center transition-colors ${
                     formData.frequency === freq.value
                       ? 'border-primary-500 bg-primary-50 text-primary-700'
@@ -217,7 +259,14 @@ const CreateSubscriptionModal: React.FC<CreateSubscriptionModalProps> = ({
                   <button
                     key={day.value}
                     type="button"
-                    onClick={() => handleDayToggle(day.value)}
+                    onClick={() => {
+                      actionTracker.trackClick('delivery_day_toggle_button', window.location.pathname, {
+                        component: 'CreateSubscriptionModal',
+                        day: day.value,
+                        action: formData.delivery_days?.includes(day.value) ? 'remove' : 'add'
+                      });
+                      handleDayToggle(day.value);
+                    }}
                     className={`p-2 text-sm border rounded-lg text-center transition-colors ${
                       formData.delivery_days?.includes(day.value)
                         ? 'border-primary-500 bg-primary-50 text-primary-700'
@@ -319,7 +368,12 @@ const CreateSubscriptionModal: React.FC<CreateSubscriptionModalProps> = ({
           <div className="flex justify-end gap-3 pt-4">
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => {
+                actionTracker.trackClick('cancel_subscription_button', window.location.pathname, {
+                  component: 'CreateSubscriptionModal'
+                });
+                onClose();
+              }}
               className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
             >
               Cancel

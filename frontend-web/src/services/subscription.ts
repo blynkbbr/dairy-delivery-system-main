@@ -18,6 +18,7 @@ export interface UpdateSubscriptionData {
   delivery_date?: number;
   delivery_time_slot?: string;
   status?: 'active' | 'paused' | 'cancelled';
+  notes?: string;
 }
 
 export const subscriptionService = {

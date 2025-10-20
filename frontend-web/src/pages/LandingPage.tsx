@@ -1,19 +1,25 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { 
-  Truck, 
-  Clock, 
-  Shield, 
-  Star, 
-  ArrowRight, 
+import {
+  Truck,
+  Clock,
+  Shield,
+  Star,
+  ArrowRight,
   Phone,
   Mail,
   MapPin,
   CheckCircle
 } from 'lucide-react';
 
+import actionTracker from '../utils/actionTracker';
+
 const LandingPage: React.FC = () => {
+  useEffect(() => {
+    actionTracker.trackPageView('landing');
+  }, []);
+
   const features = [
     {
       icon: <Truck className="h-8 w-8 text-primary-600" />,
@@ -85,7 +91,7 @@ const LandingPage: React.FC = () => {
               <Link to="/admin-login" className="text-sm text-gray-600 hover:text-gray-900">
                 Admin
               </Link>
-              <Link to="/login" className="btn-primary">
+              <Link to="/login" className="btn-primary" onClick={() => actionTracker.trackClick('get_started_button', 'landing')}>
                 Get Started
               </Link>
             </div>
@@ -113,11 +119,11 @@ const LandingPage: React.FC = () => {
               </p>
 
               <div className="flex flex-col sm:flex-row gap-4 mt-8">
-                <Link to="/login" className="btn-primary btn-lg">
+                <Link to="/login" className="btn-primary btn-lg" onClick={() => actionTracker.trackClick('start_subscription_button', 'landing')}>
                   Start Your Subscription
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Link>
-                <button className="btn-secondary btn-lg">
+                <button className="btn-secondary btn-lg" onClick={() => actionTracker.trackClick('call_us_button', 'landing')}>
                   <Phone className="mr-2 h-5 w-5" />
                   Call Us Now
                 </button>
@@ -255,7 +261,7 @@ const LandingPage: React.FC = () => {
                   )}
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">{product.name}</h3>
                   <p className="text-2xl font-bold text-primary-600 mb-4">{product.price}</p>
-                  <button className="w-full btn-primary group-hover:shadow-md">
+                  <button className="w-full btn-primary group-hover:shadow-md" onClick={() => actionTracker.trackClick('add_to_cart_button', 'landing', { product: product.name })}>
                     Add to Cart
                   </button>
                 </div>
@@ -281,10 +287,10 @@ const LandingPage: React.FC = () => {
               Join thousands of satisfied customers and enjoy fresh dairy products delivered daily.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link to="/login" className="bg-white text-primary-600 hover:bg-gray-50 btn btn-lg font-semibold">
+              <Link to="/login" className="bg-white text-primary-600 hover:bg-gray-50 btn btn-lg font-semibold" onClick={() => actionTracker.trackClick('start_subscription_cta', 'landing')}>
                 Start Your Subscription
               </Link>
-              <button className="border-2 border-white text-white hover:bg-white hover:text-primary-600 btn btn-lg">
+              <button className="border-2 border-white text-white hover:bg-white hover:text-primary-600 btn btn-lg" onClick={() => actionTracker.trackClick('download_app_button', 'landing')}>
                 Download App
               </button>
             </div>

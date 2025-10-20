@@ -10,6 +10,7 @@ import { Phone, ArrowLeft, Shield, Clock } from 'lucide-react';
 import { useAuthStore } from '../store/index.ts';
 import { authService } from '../services/auth.ts';
 import { LoginFormData } from '../types';
+import actionTracker from '../utils/actionTracker';
 
 const phoneSchema = yup.object({
   phone: yup
@@ -29,6 +30,10 @@ const otpSchema = yup.object({
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const { login } = useAuthStore();
+
+  useEffect(() => {
+    actionTracker.trackPageView('login');
+  }, []);
   
   // Use local state instead of global state to prevent re-renders
   const [isLoading, setIsLoading] = useState(false);
@@ -57,18 +62,20 @@ const LoginPage: React.FC = () => {
     try {
       setIsLoading(true);
       const result = await authService.sendOtp(phone);
-      
+
       // Update state to show OTP input
       setPhoneNumber(phone);
       setOtpSent(true);
       setShowOtpInput(true);
-      
+
       // Update form with phone number for OTP verification
       combinedForm.setValue('phone', phone);
-      
+
+      actionTracker.trackFormSubmit('send_otp_form', 'login', { phone: phone.substring(0, 3) + '***' + phone.substring(7) });
       toast.success('OTP sent successfully! Please enter the OTP below.');
-      
+
     } catch (error: any) {
+      actionTracker.trackAction('otp_send_failed', { error: error.message, phone: phone.substring(0, 3) + '***' + phone.substring(7) });
       toast.error(error.response?.data?.message || error.message || 'Failed to send OTP');
     } finally {
       setIsLoading(false);
@@ -79,23 +86,29 @@ const LoginPage: React.FC = () => {
     try {
       setIsLoading(true);
       const response = await authService.verifyOtp(data);
-      
+
       login(response.user, response.token);
+      actionTracker.trackFormSubmit('verify_otp_form', 'login', { userId: response.user.id, role: response.user.role });
       toast.success(`Welcome ${response.user.full_name || 'back'}!`);
-      
+
       // Redirect based on role or collect profile if new user
       if (response.user.role === 'admin') {
+        actionTracker.trackNavigation('login', 'admin_dashboard');
         navigate('/admin');
       } else if (response.user.role === 'agent') {
+        actionTracker.trackNavigation('login', 'agent_dashboard');
         navigate('/agent');
       } else if (!response.user.full_name || !response.user.email) {
         // User needs to complete profile
+        actionTracker.trackNavigation('login', 'profile_setup');
         navigate('/profile-setup');
       } else {
+        actionTracker.trackNavigation('login', 'dashboard');
         navigate('/dashboard');
       }
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || error.message || 'Invalid OTP';
+      actionTracker.trackAction('otp_verification_failed', { error: errorMessage });
       toast.error(errorMessage);
     } finally {
       setIsLoading(false);
@@ -214,6 +227,7 @@ const LoginPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
+                    actionTracker.trackClick('change_number_button', 'login');
                     setShowOtpInput(false);
                     setOtpSent(false);
                     setPhoneNumber('');
@@ -225,7 +239,10 @@ const LoginPage: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleSendOtp(phoneNumber)}
+                  onClick={() => {
+                    actionTracker.trackClick('resend_otp_button', 'login');
+                    handleSendOtp(phoneNumber);
+                  }}
                   disabled={isLoading}
                   className="flex-1 text-sm text-primary-600 hover:text-primary-700 font-medium"
                 >
@@ -269,7 +286,7 @@ const LoginPage: React.FC = () => {
           </p>
           
           <div className="mt-4 pt-4 border-t border-gray-200">
-            <Link to="/admin-login" className="text-primary-600 hover:text-primary-700 font-medium">
+            <Link to="/admin-login" className="text-primary-600 hover:text-primary-700 font-medium" onClick={() => actionTracker.trackNavigation('login', 'admin_login')}>
               Admin Login →
             </Link>
           </div>

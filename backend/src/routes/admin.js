@@ -192,7 +192,7 @@ router.get('/dashboard', async (req, res) => {
       .join('products', 'subscription_deliveries.product_id', 'products.id')
       .select(
         'subscription_deliveries.id',
-        'users.name as customer_name',
+        'users.full_name as customer_name',
         'products.name as product_name',
         'subscription_deliveries.quantity',
         'subscription_deliveries.status',
@@ -290,8 +290,8 @@ router.get('/users', async (req, res) => {
 
   try {
     let query = db('users').select(
-      'id', 'phone_number', 'name', 'email', 'role', 'status', 
-      'created_at', 'last_login_at'
+      'id', 'phone', 'full_name', 'email', 'role', 'status',
+      'created_at', 'updated_at'
     );
 
     if (search) {
@@ -354,7 +354,7 @@ router.get('/products', async (req, res) => {
 
 router.post('/products', async (req, res) => {
   const db = require('../utils/database');
-  const { name, description, price, unit, category, image_url, status = 'active' } = req.body;
+  const { name, description, price, unit, image_url, status = 'active' } = req.body;
 
   // Validation
   if (!name || !price || !unit) {
@@ -364,19 +364,18 @@ router.post('/products', async (req, res) => {
   }
 
   try {
-    const [productId] = await db('products').insert({
+    const productId = await db('products').insert({
       name,
       description,
       price: parseFloat(price),
       unit,
-      category,
       image_url,
       status,
       created_at: new Date(),
       updated_at: new Date()
-    });
+    }).returning('id');
 
-    const product = await db('products').where('id', productId).first();
+    const product = await db('products').where('id', productId[0].id).first();
     res.status(201).json({
       success: true,
       message: 'Product created successfully',
